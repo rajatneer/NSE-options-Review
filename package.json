@@ -1,0 +1,21 @@
+{
+  "name": "nse-option-analyzer",
+  "version": "1.0.0",
+  "description": "NSE option chain analyzer for short-term market direction",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "keywords": [
+    "nse",
+    "options",
+    "analysis",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "express": "^4.21.2"
+  }
+}

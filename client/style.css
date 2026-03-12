@@ -1,0 +1,281 @@
+:root {
+  --bg: #09151f;
+  --panel: rgba(12, 28, 41, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.14);
+  --text: #f2f7ff;
+  --muted: #a9c0d6;
+  --bull: #42d392;
+  --bear: #ff6f6f;
+  --neutral: #f3d47c;
+  --accent: #5ec5ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(94, 197, 255, 0.26), transparent 28%),
+    radial-gradient(circle at 86% 22%, rgba(66, 211, 146, 0.2), transparent 22%),
+    linear-gradient(140deg, #071018 0%, #0b1d2c 46%, #09131b 100%);
+  overflow-x: hidden;
+}
+
+.bg-glow {
+  position: fixed;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.bg-glow-one {
+  background: rgba(66, 211, 146, 0.22);
+  top: -90px;
+  left: -80px;
+}
+
+.bg-glow-two {
+  background: rgba(255, 111, 111, 0.15);
+  bottom: -120px;
+  right: -80px;
+}
+
+.dashboard {
+  width: min(1120px, 94vw);
+  margin: 28px auto;
+  position: relative;
+  z-index: 1;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.tag {
+  margin: 0;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+h1 {
+  margin: 8px 0;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(1.65rem, 2.8vw, 2.45rem);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  max-width: 740px;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.run-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #031b2a;
+  background: linear-gradient(110deg, #5ec5ff 0%, #42d392 100%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.run-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(94, 197, 255, 0.3);
+}
+
+.run-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.last-updated {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.spinner-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hidden {
+  display: none;
+}
+
+.error-box {
+  margin-bottom: 16px;
+  background: rgba(255, 111, 111, 0.12);
+  border: 1px solid rgba(255, 111, 111, 0.44);
+  color: #ffdede;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.metric-card,
+.prediction-panel,
+.chart-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.metric-card {
+  padding: 16px;
+  animation: fadeInUp 0.45s ease both;
+}
+
+.metric-card h2,
+.prediction-panel h2,
+.chart-card h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.metric-card p {
+  margin: 8px 0 0;
+  font-size: 1.34rem;
+  font-weight: 700;
+}
+
+.prediction-panel {
+  margin-top: 14px;
+  padding: 18px;
+}
+
+.prediction {
+  margin: 10px 0 8px;
+  font-size: clamp(1.55rem, 4vw, 2.25rem);
+  font-family: "Syne", sans-serif;
+}
+
+.prediction.bull {
+  color: var(--bull);
+}
+
+.prediction.bear {
+  color: var(--bear);
+}
+
+.prediction.neutral {
+  color: var(--neutral);
+}
+
+.market-bias,
+.buildup-signal {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.source-info {
+  margin: 8px 0 0;
+  color: #d8e7f5;
+  font-size: 0.85rem;
+}
+
+.charts-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.chart-card {
+  padding: 14px;
+  animation: fadeInUp 0.55s ease both;
+}
+
+.chart-card canvas {
+  margin-top: 12px;
+  width: 100%;
+  height: 320px;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 930px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .dashboard {
+    width: min(96vw, 1120px);
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    margin-bottom: 14px;
+  }
+}
