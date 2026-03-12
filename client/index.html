@@ -70,6 +70,7 @@
         <h2>Final Market Prediction</h2>
         <p id="prediction" class="prediction neutral">SIDEWAYS</p>
         <p id="marketBias" class="market-bias">Bias: Not analyzed</p>
+        <p id="predictionReason" class="prediction-reason">Reason: Not analyzed</p>
         <p id="buildupSignal" class="buildup-signal">Buildup: Not analyzed</p>
         <p id="sourceInfo" class="source-info">Source: Not analyzed</p>
       </section>
@@ -83,6 +84,42 @@
           <h2>Strike vs OI</h2>
           <canvas id="strikeChart"></canvas>
         </article>
+      </section>
+
+      <section class="trade-panel">
+        <h2>Suggested Trade Setup (10-15 Points)</h2>
+        <p class="trade-subtext">
+          Generated from current call-side vs put-side market pressure (OI and traded volume).
+        </p>
+
+        <div class="trade-grid">
+          <article class="trade-card">
+            <h3>Trade Direction</h3>
+            <p id="tradeAction">--</p>
+          </article>
+          <article class="trade-card">
+            <h3>Recommended Strike</h3>
+            <p id="tradeStrike">--</p>
+          </article>
+          <article class="trade-card">
+            <h3>Entry Level</h3>
+            <p id="tradeEntry">--</p>
+          </article>
+          <article class="trade-card">
+            <h3>Stop Loss</h3>
+            <p id="tradeStopLoss">--</p>
+          </article>
+          <article class="trade-card">
+            <h3>Target</h3>
+            <p id="tradeTarget">--</p>
+          </article>
+          <article class="trade-card">
+            <h3>Expected Points</h3>
+            <p id="tradePoints">--</p>
+          </article>
+        </div>
+
+        <p id="tradeRationale" class="trade-rationale">Rationale: Not analyzed</p>
       </section>
     </main>
 

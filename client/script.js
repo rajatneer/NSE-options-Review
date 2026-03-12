@@ -11,8 +11,16 @@ const callBuildupEl = document.getElementById("callBuildup");
 const putBuildupEl = document.getElementById("putBuildup");
 const predictionEl = document.getElementById("prediction");
 const marketBiasEl = document.getElementById("marketBias");
+const predictionReasonEl = document.getElementById("predictionReason");
 const buildupSignalEl = document.getElementById("buildupSignal");
 const sourceInfoEl = document.getElementById("sourceInfo");
+const tradeActionEl = document.getElementById("tradeAction");
+const tradeStrikeEl = document.getElementById("tradeStrike");
+const tradeEntryEl = document.getElementById("tradeEntry");
+const tradeStopLossEl = document.getElementById("tradeStopLoss");
+const tradeTargetEl = document.getElementById("tradeTarget");
+const tradePointsEl = document.getElementById("tradePoints");
+const tradeRationaleEl = document.getElementById("tradeRationale");
 
 const callPutCtx = document.getElementById("callPutChart").getContext("2d");
 const strikeCtx = document.getElementById("strikeChart").getContext("2d");
@@ -22,7 +30,8 @@ let strikeChart;
 
 function formatNumber(value) {
   try {
-    return Number(value).toLocaleString("en-IN");
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric.toLocaleString("en-IN") : "--";
   } catch (error) {
     return "--";
   }
@@ -37,6 +46,23 @@ function updatePredictionStyle(prediction) {
     predictionEl.classList.add("bear");
   } else {
     predictionEl.classList.add("neutral");
+  }
+}
+
+function updateTradeStyle(action) {
+  tradeActionEl.classList.remove("bull", "bear", "neutral");
+
+  if (typeof action !== "string") {
+    tradeActionEl.classList.add("neutral");
+    return;
+  }
+
+  if (action.includes("CALL")) {
+    tradeActionEl.classList.add("bull");
+  } else if (action.includes("PUT")) {
+    tradeActionEl.classList.add("bear");
+  } else {
+    tradeActionEl.classList.add("neutral");
   }
 }
 
@@ -184,10 +210,21 @@ async function runAnalysis() {
     putBuildupEl.textContent = formatNumber(data.putBuildup);
     predictionEl.textContent = data.prediction;
     marketBiasEl.textContent = `Bias: ${data.marketBias}`;
+    predictionReasonEl.textContent = `Reason: ${data.predictionReason || "Not available"}`;
     buildupSignalEl.textContent = `Buildup: ${data.buildupSignal}`;
     const expiryText = data.fallbackExpiry ? ` | Expiry: ${data.fallbackExpiry}` : "";
     sourceInfoEl.textContent = `Source: ${data.dataSource || "NSE_OPTION_CHAIN"} | Buildup Mode: ${data.buildupMode || "CHANGE_IN_OI"}${expiryText}`;
     updatePredictionStyle(data.prediction);
+
+    const tradeSetup = data.tradeSetup || {};
+    tradeActionEl.textContent = tradeSetup.action || "NO TRADE";
+    tradeStrikeEl.textContent = `${formatNumber(tradeSetup.strikePrice)} ${tradeSetup.optionType || ""}`.trim();
+    tradeEntryEl.textContent = tradeSetup.entryLevel !== undefined ? formatNumber(tradeSetup.entryLevel) : "--";
+    tradeStopLossEl.textContent = tradeSetup.stopLoss !== undefined ? formatNumber(tradeSetup.stopLoss) : "--";
+    tradeTargetEl.textContent = tradeSetup.target !== undefined ? formatNumber(tradeSetup.target) : "--";
+    tradePointsEl.textContent = tradeSetup.targetPoints || "--";
+    tradeRationaleEl.textContent = `Rationale: ${tradeSetup.rationale || "Not available"}`;
+    updateTradeStyle(tradeSetup.action || "NO TRADE");
 
     const date = new Date(data.lastUpdated);
     lastUpdated.textContent = `Last update: ${date.toLocaleString("en-IN")}`;
