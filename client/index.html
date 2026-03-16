@@ -86,10 +86,43 @@
         </article>
       </section>
 
+      <section class="tv-panel">
+        <h2>TradingView NIFTY 50 Chart Details</h2>
+        <p class="trade-subtext">
+          Live technical snapshot from TradingView for NSE:NIFTY used in final prediction.
+        </p>
+        <div class="trade-grid">
+          <article class="trade-card trade-factor-card">
+            <h3>Trend Recommendation</h3>
+            <p id="tvTrend">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>RSI</h3>
+            <p id="tvRsi">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>MACD vs Signal</h3>
+            <p id="tvMacd">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>MA Structure</h3>
+            <p id="tvMa">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>OHLC</h3>
+            <p id="tvOhlc">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>Chart Volume & Change</h3>
+            <p id="tvVolume">--</p>
+          </article>
+        </div>
+      </section>
+
       <section class="trade-panel">
         <h2>Suggested Trade Setup (10-15 Points)</h2>
         <p class="trade-subtext">
-          Generated from current call-side vs put-side market pressure (OI and traded volume).
+          Generated from call-side vs put-side pressure. Entry, Stop Loss, and Target are Spot NIFTY levels.
         </p>
 
         <div class="trade-grid">
@@ -98,24 +131,36 @@
             <p id="tradeAction">--</p>
           </article>
           <article class="trade-card">
-            <h3>Recommended Strike</h3>
+            <h3>Reference Strike (Flow)</h3>
             <p id="tradeStrike">--</p>
           </article>
           <article class="trade-card">
-            <h3>Entry Level</h3>
+            <h3>Spot Entry (NIFTY)</h3>
             <p id="tradeEntry">--</p>
           </article>
           <article class="trade-card">
-            <h3>Stop Loss</h3>
+            <h3>Spot Stop Loss</h3>
             <p id="tradeStopLoss">--</p>
           </article>
           <article class="trade-card">
-            <h3>Target</h3>
+            <h3>Spot Target</h3>
             <p id="tradeTarget">--</p>
           </article>
           <article class="trade-card">
             <h3>Expected Points</h3>
             <p id="tradePoints">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>1. Market Structure</h3>
+            <p id="tradeMarketStructure">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>2. Global Sentiment</h3>
+            <p id="tradeGlobalSentiment">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>3. Support & Resistance</h3>
+            <p id="tradeSupportResistance">--</p>
           </article>
         </div>
 

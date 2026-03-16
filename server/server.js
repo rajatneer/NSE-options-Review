@@ -10,6 +10,43 @@ const NSE_BASE_URL = "https://www.nseindia.com";
 const API_PATH = "/api/option-chain-indices?symbol=NIFTY";
 const SNAPSHOT_CONTRACTS_PATH = "/api/snapshot-derivatives-equity?index=contracts&limit=5000";
 const SNAPSHOT_OI_PATH = "/api/snapshot-derivatives-equity?index=oi&limit=5000";
+const STOOQ_BASE_URL = "https://stooq.com";
+const TRADINGVIEW_SCANNER_URL = "https://scanner.tradingview.com/india/scan";
+const OPTION_CHAIN_CACHE_TTL_MS = 20 * 60 * 1000;
+
+let optionChainCache = null;
+
+const GLOBAL_INDEX_SYMBOLS = [
+  { symbol: "^spx", label: "S&P 500" },
+  { symbol: "^dji", label: "Dow Jones" },
+  { symbol: "^ndq", label: "Nasdaq 100" },
+  { symbol: "^ukx", label: "FTSE 100" },
+  { symbol: "^dax", label: "DAX" },
+  { symbol: "^hsi", label: "Hang Seng" },
+  { symbol: "^nkx", label: "Nikkei 225" }
+];
+
+const TRADINGVIEW_COLUMNS = [
+  "Recommend.All",
+  "Recommend.MA",
+  "Recommend.Other",
+  "open",
+  "high",
+  "low",
+  "close",
+  "change",
+  "volume",
+  "RSI",
+  "MACD.macd",
+  "MACD.signal",
+  "EMA20",
+  "EMA50",
+  "EMA200",
+  "SMA20",
+  "SMA50",
+  "SMA200",
+  "VWAP"
+];
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -25,6 +62,252 @@ function hasOptionRows(payload) {
     (Array.isArray(recordRows) && recordRows.length > 0) ||
     (Array.isArray(filteredRows) && filteredRows.length > 0)
   );
+}
+
+function updateOptionChainCache(payload) {
+  try {
+    if (!payload || typeof payload !== "object") {
+      throw new TypeError("Option chain payload is invalid for cache");
+    }
+
+    optionChainCache = {
+      payload,
+      cachedAt: new Date().toISOString(),
+      timestamp: Date.now()
+    };
+  } catch (error) {
+    console.error("[CACHE_UPDATE_ERROR]", error);
+  }
+}
+
+function getFreshOptionChainCache() {
+  try {
+    if (!optionChainCache) {
+      return null;
+    }
+
+    if (Date.now() - optionChainCache.timestamp > OPTION_CHAIN_CACHE_TTL_MS) {
+      return null;
+    }
+
+    return optionChainCache;
+  } catch (error) {
+    console.error("[CACHE_READ_ERROR]", error);
+    return null;
+  }
+}
+
+function parseStooqQuote(rawLine, label) {
+  try {
+    if (typeof rawLine !== "string" || rawLine.trim() === "") {
+      throw new TypeError("Stooq quote line is empty");
+    }
+
+    const fields = rawLine.trim().split(",");
+    if (fields.length < 7) {
+      throw new RangeError("Stooq quote has insufficient fields");
+    }
+
+    const open = Number(fields[3]);
+    const close = Number(fields[6]);
+
+    if (!Number.isFinite(open) || !Number.isFinite(close) || open <= 0) {
+      throw new RangeError("Stooq quote has invalid OHLC values");
+    }
+
+    const changePercent = ((close - open) / open) * 100;
+    return {
+      name: label,
+      open,
+      close,
+      changePercent: Number(changePercent.toFixed(3))
+    };
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof RangeError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      throw new Error(`Stooq quote parsing failed: ${error.message}`);
+    }
+
+    throw new Error("Stooq quote parsing failed with unknown error");
+  }
+}
+
+function toFiniteNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function mapRecommendationLabel(value) {
+  if (value >= 0.5) {
+    return "STRONG_BUY";
+  }
+
+  if (value >= 0.1) {
+    return "BUY";
+  }
+
+  if (value <= -0.5) {
+    return "STRONG_SELL";
+  }
+
+  if (value <= -0.1) {
+    return "SELL";
+  }
+
+  return "NEUTRAL";
+}
+
+async function fetchTradingViewChartDetails() {
+  try {
+    const response = await axios.post(
+      TRADINGVIEW_SCANNER_URL,
+      {
+        symbols: {
+          tickers: ["NSE:NIFTY"],
+          query: {
+            types: []
+          }
+        },
+        columns: TRADINGVIEW_COLUMNS
+      },
+      {
+        timeout: 12000,
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://in.tradingview.com",
+          Referer: "https://in.tradingview.com/"
+        },
+        validateStatus: (status) => status >= 200 && status < 500
+      }
+    );
+
+    const row = response.data?.data?.[0]?.d;
+    if (response.status !== 200 || !Array.isArray(row) || row.length < 19) {
+      throw new Error(`TradingView scanner returned invalid payload (${response.status})`);
+    }
+
+    const recommendationValue = toFiniteNumber(row[0]);
+
+    return {
+      source: "TRADINGVIEW",
+      recommendationValue,
+      recommendationLabel: mapRecommendationLabel(recommendationValue),
+      recommendationMA: toFiniteNumber(row[1]),
+      recommendationOsc: toFiniteNumber(row[2]),
+      open: toFiniteNumber(row[3]),
+      high: toFiniteNumber(row[4]),
+      low: toFiniteNumber(row[5]),
+      close: toFiniteNumber(row[6]),
+      changePercent: toFiniteNumber(row[7]),
+      volume: toFiniteNumber(row[8]),
+      rsi: toFiniteNumber(row[9]),
+      macdValue: toFiniteNumber(row[10]),
+      macdSignal: toFiniteNumber(row[11]),
+      ema20: toFiniteNumber(row[12]),
+      ema50: toFiniteNumber(row[13]),
+      ema200: toFiniteNumber(row[14]),
+      sma20: toFiniteNumber(row[15]),
+      sma50: toFiniteNumber(row[16]),
+      sma200: toFiniteNumber(row[17]),
+      vwap: toFiniteNumber(row[18]),
+      fetchedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error("[TRADINGVIEW_FETCH_ERROR]", error);
+    return {
+      source: "TRADINGVIEW_UNAVAILABLE",
+      recommendationValue: 0,
+      recommendationLabel: "NEUTRAL",
+      recommendationMA: 0,
+      recommendationOsc: 0,
+      open: 0,
+      high: 0,
+      low: 0,
+      close: 0,
+      changePercent: 0,
+      volume: 0,
+      rsi: 0,
+      macdValue: 0,
+      macdSignal: 0,
+      ema20: 0,
+      ema50: 0,
+      ema200: 0,
+      sma20: 0,
+      sma50: 0,
+      sma200: 0,
+      vwap: 0,
+      fetchedAt: new Date().toISOString()
+    };
+  }
+}
+
+async function fetchGlobalSentiment() {
+  const client = axios.create({
+    baseURL: STOOQ_BASE_URL,
+    timeout: 12000,
+    validateStatus: (status) => status >= 200 && status < 500
+  });
+
+  try {
+    const quoteCalls = GLOBAL_INDEX_SYMBOLS.map((item) =>
+      client.get(`/q/l/?s=${encodeURIComponent(item.symbol)}&i=d`).then((response) => ({
+        label: item.label,
+        status: response.status,
+        body: typeof response.data === "string" ? response.data : String(response.data || "")
+      }))
+    );
+
+    const settled = await Promise.allSettled(quoteCalls);
+    const parsedMarkets = settled
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value)
+      .filter((item) => item.status === 200 && !item.body.includes("N/D"))
+      .map((item) => {
+        try {
+          return parseStooqQuote(item.body, item.label);
+        } catch (error) {
+          return null;
+        }
+      })
+      .filter((item) => item !== null);
+
+    if (parsedMarkets.length < 3) {
+      return {
+        bias: "NEUTRAL",
+        averageChange: 0,
+        source: "STOOQ_UNAVAILABLE",
+        markets: []
+      };
+    }
+
+    const averageChange =
+      parsedMarkets.reduce((sum, item) => sum + item.changePercent, 0) / parsedMarkets.length;
+
+    let bias = "NEUTRAL";
+    if (averageChange > 0.15) {
+      bias = "BULLISH";
+    } else if (averageChange < -0.15) {
+      bias = "BEARISH";
+    }
+
+    return {
+      bias,
+      averageChange: Number(averageChange.toFixed(3)),
+      source: "STOOQ",
+      markets: parsedMarkets
+    };
+  } catch (error) {
+    console.error("[GLOBAL_SENTIMENT_ERROR]", error);
+    return {
+      bias: "NEUTRAL",
+      averageChange: 0,
+      source: "STOOQ_ERROR",
+      markets: []
+    };
+  }
 }
 
 function parseNseExpiryDate(dateText) {
@@ -249,6 +532,7 @@ async function fetchNseOptionChain() {
       lastBodyHint = JSON.stringify(response.data || {}).slice(0, 300);
 
       if (response.status === 200 && response.data && hasOptionRows(response.data)) {
+        updateOptionChainCache(response.data);
         return {
           payload: response.data,
           source: "NSE_OPTION_CHAIN"
@@ -256,6 +540,15 @@ async function fetchNseOptionChain() {
       }
 
       await sleep(450 * attempt);
+    }
+
+    const cachedChain = getFreshOptionChainCache();
+    if (cachedChain) {
+      return {
+        payload: cachedChain.payload,
+        source: "NSE_OPTION_CHAIN_CACHE",
+        cachedAt: cachedChain.cachedAt
+      };
     }
 
     const [contractsResponse, oiResponse] = await Promise.all([
@@ -306,10 +599,36 @@ async function fetchNseOptionChain() {
 
 app.use(express.static(path.join(__dirname, "..", "client")));
 
+app.get("/health", (req, res) => {
+  try {
+    res.json({
+      status: "ok",
+      service: "nse-option-analyzer",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected health check error";
+    console.error("[HEALTH_ERROR]", message, error);
+    res.status(500).json({
+      status: "error",
+      details: message
+    });
+  }
+});
+
 app.get("/analyze", async (req, res) => {
   try {
-    const nseResponse = await fetchNseOptionChain();
-    const analysis = analyzeMarket(nseResponse.payload);
+    const [nseResponse, globalSentiment, chartDetails] = await Promise.all([
+      fetchNseOptionChain(),
+      fetchGlobalSentiment(),
+      fetchTradingViewChartDetails()
+    ]);
+
+    const analysis = analyzeMarket(nseResponse.payload, {
+      globalSentiment,
+      dataSource: nseResponse.source,
+      chartDetails
+    });
 
     res.json({
       pcr: analysis.pcr,
@@ -317,17 +636,25 @@ app.get("/analyze", async (req, res) => {
       resistance: analysis.resistance,
       callBuildup: analysis.callBuildup,
       putBuildup: analysis.putBuildup,
+      volumeRatio: analysis.volumeRatio,
       prediction: analysis.prediction,
       marketBias: analysis.marketBias,
+      predictionConfidence: analysis.predictionConfidence,
+      predictionBasis: analysis.predictionBasis,
       predictionReason: analysis.predictionReason,
       buildupSignal: analysis.buildupSignal,
       buildupMode: analysis.buildupMode,
       tradeSetup: analysis.tradeSetup,
+      chartSignal: analysis.chartSignal,
+      chartDetails: analysis.chartDetails,
+      globalSentiment: analysis.globalSentiment,
+      dataQuality: analysis.dataQuality,
       currentPrice: analysis.currentPrice,
       lastUpdated: analysis.analyzedAt,
       strikes: analysis.strikes,
       dataSource: nseResponse.source,
-      fallbackExpiry: nseResponse.fallbackExpiry || null
+      fallbackExpiry: nseResponse.fallbackExpiry || null,
+      cachedAt: nseResponse.cachedAt || null
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error";

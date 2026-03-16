@@ -260,6 +260,21 @@ h1 {
   backdrop-filter: blur(8px);
 }
 
+.tv-panel {
+  margin-top: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 18px;
+  backdrop-filter: blur(8px);
+}
+
+.tv-panel h2 {
+  margin: 0;
+  font-size: 1.04rem;
+  color: #dbe9f6;
+}
+
 .trade-panel h2 {
   margin: 0;
   font-size: 1.04rem;
@@ -296,6 +311,13 @@ h1 {
   margin: 8px 0 0;
   font-size: 1.08rem;
   font-weight: 700;
+}
+
+.trade-factor-card p {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #d8e7f5;
+  line-height: 1.35;
 }
 
 .trade-card p.bull,

@@ -71,6 +71,44 @@ npm start
 
 - `http://localhost:3000`
 
+## Deploy on Render (Free Plan)
+
+This app is already compatible with Render free web service hosting.
+
+### 1. Push code to GitHub
+
+Make sure this project is in a GitHub repository.
+
+### 2. Create Render Web Service
+
+In Render:
+
+1. Click `New +`
+2. Select `Web Service`
+3. Connect your GitHub repo
+4. Use these settings:
+
+- Runtime: `Node`
+- Build Command: `npm ci`
+- Start Command: `npm start`
+- Health Check Path: `/health`
+- Plan: `Free`
+
+### 3. Auto deploy using render.yaml
+
+This repo includes `render.yaml`, so Render can auto-detect deployment settings.
+
+### 4. Open deployed app
+
+Render gives you a URL like:
+
+- `https://your-service-name.onrender.com`
+
+### Important Free Plan Notes
+
+- Free services can spin down when idle and take time to wake up.
+- NSE may block some cloud IP ranges. If primary option-chain calls are blocked, this app uses fallback logic and marks confidence in the response.
+
 ## API Response Shape
 
 `GET /analyze` returns:

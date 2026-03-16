@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: nse-option-analyzer
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
