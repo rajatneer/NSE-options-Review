@@ -23,19 +23,39 @@ const tradePointsEl = document.getElementById("tradePoints");
 const tradeMarketStructureEl = document.getElementById("tradeMarketStructure");
 const tradeGlobalSentimentEl = document.getElementById("tradeGlobalSentiment");
 const tradeSupportResistanceEl = document.getElementById("tradeSupportResistance");
+const tradeVolumeFlowEl = document.getElementById("tradeVolumeFlow");
+const tradeSentimentEngineEl = document.getElementById("tradeSentimentEngine");
+const tradeOptionChainEl = document.getElementById("tradeOptionChain");
+const tradePcrEl = document.getElementById("tradePcr");
+const tradeFiiDiiEl = document.getElementById("tradeFiiDii");
+const tradeTechnicalEl = document.getElementById("tradeTechnical");
+const tradeNewsEl = document.getElementById("tradeNews");
+const tradeGiftNiftyEl = document.getElementById("tradeGiftNifty");
 const tradeRationaleEl = document.getElementById("tradeRationale");
-const tvTrendEl = document.getElementById("tvTrend");
-const tvRsiEl = document.getElementById("tvRsi");
-const tvMacdEl = document.getElementById("tvMacd");
-const tvMaEl = document.getElementById("tvMa");
-const tvOhlcEl = document.getElementById("tvOhlc");
-const tvVolumeEl = document.getElementById("tvVolume");
+const tomorrowSentimentEl = document.getElementById("tomorrowSentiment");
+const sentimentScoreTextEl = document.getElementById("sentimentScoreText");
+const sentimentColorIndicatorEl = document.getElementById("sentimentColorIndicator");
+const sentimentGeneratedAtEl = document.getElementById("sentimentGeneratedAt");
+const globalSentimentResultEl = document.getElementById("globalSentimentResult");
+const giftNiftyResultEl = document.getElementById("giftNiftyResult");
+const optionChainResultEl = document.getElementById("optionChainResult");
+const pcrRatioResultEl = document.getElementById("pcrRatioResult");
+const supportLevelResultEl = document.getElementById("supportLevelResult");
+const resistanceLevelResultEl = document.getElementById("resistanceLevelResult");
+const fiiActivityResultEl = document.getElementById("fiiActivityResult");
+const technicalResultEl = document.getElementById("technicalResult");
+const newsSentimentResultEl = document.getElementById("newsSentimentResult");
+const newsHeadlinesEl = document.getElementById("newsHeadlines");
 
-const callPutCtx = document.getElementById("callPutChart").getContext("2d");
-const strikeCtx = document.getElementById("strikeChart").getContext("2d");
+const callPutCanvas = document.getElementById("callPutChart");
+const strikeCanvas = document.getElementById("strikeChart");
+const callPutCtx = callPutCanvas ? callPutCanvas.getContext("2d") : null;
+const strikeCtx = strikeCanvas ? strikeCanvas.getContext("2d") : null;
+const sentimentGaugeCtx = document.getElementById("sentimentGauge").getContext("2d");
 
 let callPutChart;
 let strikeChart;
+let sentimentGaugeChart;
 
 function formatNumber(value) {
   try {
@@ -75,8 +95,98 @@ function updateTradeStyle(action) {
   }
 }
 
+function getSignalClass(signal) {
+  if (signal === "BULLISH" || signal === "UP") {
+    return "bull";
+  }
+
+  if (signal === "BEARISH" || signal === "DOWN") {
+    return "bear";
+  }
+
+  return "neutral";
+}
+
+function updateSignalElement(element, signal) {
+  element.classList.remove("bull", "bear", "neutral");
+  element.classList.add(getSignalClass(signal));
+}
+
+function renderSentimentGauge(score, marketSentiment) {
+  try {
+    const boundedScore = Number.isFinite(Number(score)) ? Number(score) : 0;
+    const normalized = Math.max(0, Math.min(14, boundedScore + 7));
+    const fillColor =
+      marketSentiment === "BULLISH"
+        ? "rgba(66, 211, 146, 0.92)"
+        : marketSentiment === "BEARISH"
+          ? "rgba(255, 111, 111, 0.92)"
+          : "rgba(243, 212, 124, 0.95)";
+
+    if (sentimentGaugeChart) {
+      sentimentGaugeChart.destroy();
+    }
+
+    sentimentGaugeChart = new Chart(sentimentGaugeCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Sentiment", "Remaining"],
+        datasets: [
+          {
+            data: [normalized, 14 - normalized],
+            backgroundColor: [fillColor, "rgba(255, 255, 255, 0.14)"],
+            borderWidth: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        cutout: "70%",
+        rotation: 270,
+        circumference: 180,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            enabled: false
+          }
+        }
+      },
+      plugins: [
+        {
+          id: "sentimentGaugeCenterText",
+          beforeDraw(chart) {
+            const { ctx } = chart;
+            const centerX = chart.width / 2;
+            const centerY = chart.height * 0.74;
+
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#f2f7ff";
+            ctx.font = "700 20px Space Grotesk";
+            ctx.fillText(String(boundedScore), centerX, centerY);
+            ctx.fillStyle = "#a9c0d6";
+            ctx.font = "500 12px Space Grotesk";
+            ctx.fillText("Score", centerX, centerY + 18);
+            ctx.restore();
+          }
+        }
+      ]
+    });
+  } catch (error) {
+    throw new Error(
+      `Sentiment gauge render failed: ${error instanceof Error ? error.message : "Unknown gauge error"}`
+    );
+  }
+}
+
 function renderCharts(strikes) {
   try {
+    if (!callPutCtx || !strikeCtx) {
+      return;
+    }
+
     const rows = Array.isArray(strikes) ? strikes : [];
     const sortedByActivity = [...rows]
       .sort((a, b) => b.callOI + b.putOI - (a.callOI + a.putOI))
@@ -228,17 +338,11 @@ async function runAnalysis() {
       : "";
     const cacheText = data.cachedAt ? ` | Cache: ${new Date(data.cachedAt).toLocaleTimeString("en-IN")}` : "";
     const basisText = data.predictionBasis ? ` | Prediction Basis: ${data.predictionBasis}` : "";
-    sourceInfoEl.textContent = `Source: ${data.dataSource || "NSE_OPTION_CHAIN"} | Buildup Mode: ${data.buildupMode || "CHANGE_IN_OI"}${basisText}${confidenceText}${qualityText}${expiryText}${cacheText}`;
+    const sentimentEngineText = data.marketSentimentAnalyzer
+      ? ` | Sentiment Engine: ${data.marketSentimentAnalyzer.marketSentiment || "NEUTRAL"} (${data.marketSentimentAnalyzer.totalScore ?? 0})`
+      : "";
+    sourceInfoEl.textContent = `Source: ${data.dataSource || "NSE_OPTION_CHAIN"} | Buildup Mode: ${data.buildupMode || "CHANGE_IN_OI"}${basisText}${sentimentEngineText}${confidenceText}${qualityText}${expiryText}${cacheText}`;
     updatePredictionStyle(data.prediction);
-
-    const chartDetails = data.chartDetails || {};
-    const chartSignal = data.chartSignal || {};
-    tvTrendEl.textContent = `${chartSignal.bias || "NEUTRAL"} | TV: ${chartDetails.recommendationLabel || "NEUTRAL"}`;
-    tvRsiEl.textContent = chartDetails.rsi !== undefined ? Number(chartDetails.rsi).toFixed(2) : "--";
-    tvMacdEl.textContent = `MACD ${formatNumber(chartDetails.macdValue)} / Signal ${formatNumber(chartDetails.macdSignal)}`;
-    tvMaEl.textContent = `EMA20 ${formatNumber(chartDetails.ema20)} | EMA50 ${formatNumber(chartDetails.ema50)} | EMA200 ${formatNumber(chartDetails.ema200)}`;
-    tvOhlcEl.textContent = `O ${formatNumber(chartDetails.open)} H ${formatNumber(chartDetails.high)} L ${formatNumber(chartDetails.low)} C ${formatNumber(chartDetails.close)}`;
-    tvVolumeEl.textContent = `Vol ${formatNumber(chartDetails.volume)} | Chg ${chartDetails.changePercent !== undefined ? Number(chartDetails.changePercent).toFixed(2) + "%" : "--"}`;
 
     const tradeSetup = data.tradeSetup || {};
     const tradeFactors = tradeSetup.factors || {};
@@ -251,21 +355,103 @@ async function runAnalysis() {
     tradeMarketStructureEl.textContent = `${tradeFactors.marketStructure?.signal || "NEUTRAL"} | ${tradeFactors.marketStructure?.detail || "Not available"}`;
     tradeGlobalSentimentEl.textContent = `${tradeFactors.globalSentiment?.signal || "NEUTRAL"} | ${tradeFactors.globalSentiment?.detail || "Not available"}`;
     tradeSupportResistanceEl.textContent = `${tradeFactors.supportResistance?.signal || "NEUTRAL"} | ${tradeFactors.supportResistance?.detail || "Not available"}`;
+    tradeVolumeFlowEl.textContent = `${tradeFactors.volumeFlow?.signal || "NEUTRAL"} | ${tradeFactors.volumeFlow?.detail || "Not available"}`;
+    tradeSentimentEngineEl.textContent = `${tradeFactors.sentimentEngine?.signal || "NEUTRAL"} | ${tradeFactors.sentimentEngine?.detail || "Not available"}`;
+    tradeOptionChainEl.textContent = `${tradeFactors.optionChain?.signal || "NEUTRAL"} | ${tradeFactors.optionChain?.detail || "Not available"}`;
+    tradePcrEl.textContent = `${tradeFactors.pcr?.signal || "NEUTRAL"} | ${tradeFactors.pcr?.detail || "Not available"}`;
+    tradeFiiDiiEl.textContent = `${tradeFactors.fiiDii?.signal || "NEUTRAL"} | ${tradeFactors.fiiDii?.detail || "Not available"}`;
+    tradeTechnicalEl.textContent = `${tradeFactors.technicalIndicators?.signal || "NEUTRAL"} | ${tradeFactors.technicalIndicators?.detail || "Not available"}`;
+    tradeNewsEl.textContent = `${tradeFactors.newsSentiment?.signal || "NEUTRAL"} | ${tradeFactors.newsSentiment?.detail || "Not available"}`;
+    tradeGiftNiftyEl.textContent = `${tradeFactors.giftNifty?.signal || "NEUTRAL"} | ${tradeFactors.giftNifty?.detail || "Not available"}`;
     const executionBasis = tradeSetup.executionBasis ? `Execution: ${tradeSetup.executionBasis}` : "";
     const confirmation = tradeSetup.confirmationInstrument ? ` | Confirmation: ${tradeSetup.confirmationInstrument}` : "";
-    tradeRationaleEl.textContent = `Rationale: ${tradeSetup.rationale || "Not available"}${executionBasis ? ` | ${executionBasis}` : ""}${confirmation}`;
+    const weightedScoreText =
+      tradeSetup.weightedDecisionScore !== undefined && tradeSetup.weightedDecisionThreshold !== undefined
+        ? ` | Weighted Score: ${tradeSetup.weightedDecisionScore} (Threshold ${tradeSetup.weightedDecisionThreshold})`
+        : "";
+    tradeRationaleEl.textContent = `Rationale: ${tradeSetup.rationale || "Not available"}${executionBasis ? ` | ${executionBasis}` : ""}${confirmation}${weightedScoreText}`;
     updateTradeStyle(tradeSetup.action || "NO TRADE");
 
     const date = new Date(data.lastUpdated);
     lastUpdated.textContent = `Last update: ${date.toLocaleString("en-IN")}`;
 
     renderCharts(data.strikes);
+    await runSentimentAnalysis();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected analysis error";
     showError(`Unable to run market analysis. ${message}`);
   } finally {
     runBtn.disabled = false;
     spinner.classList.add("hidden");
+  }
+}
+
+async function runSentimentAnalysis() {
+  try {
+    const response = await fetch("/api/final-sentiment", {
+      method: "GET"
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => ({}));
+      const details = errorPayload.details || `Request failed with status ${response.status}`;
+      throw new Error(details);
+    }
+
+    const data = await response.json();
+    const details = data.details || {};
+    const globalMarket = details.globalMarket || {};
+    const giftNifty = details.giftNifty || {};
+    const optionChain = details.optionChain || {};
+    const pcr = details.pcr || {};
+    const fiiDii = details.fiiDii || {};
+    const technical = details.technicalIndicators || {};
+    const news = details.newsSentiment || {};
+
+    tomorrowSentimentEl.textContent = data.marketSentiment || "NEUTRAL";
+    updateSignalElement(tomorrowSentimentEl, data.marketSentiment || "NEUTRAL");
+
+    const minRange = data.scoreRange?.min ?? -7;
+    const maxRange = data.scoreRange?.max ?? 7;
+    sentimentScoreTextEl.textContent = `Score: ${data.totalScore ?? 0} (Range: ${minRange} to ${maxRange})`;
+    sentimentColorIndicatorEl.textContent = `Color: ${data.colorIndicator || "YELLOW"}`;
+
+    const globalDow = Number(globalMarket.indices?.dowJones || 0).toFixed(2);
+    const globalNasdaq = Number(globalMarket.indices?.nasdaq || 0).toFixed(2);
+    const globalSp = Number(globalMarket.indices?.sp500 || 0).toFixed(2);
+    globalSentimentResultEl.textContent = `${globalMarket.signal || "NEUTRAL"} | Dow ${globalDow}% | Nasdaq ${globalNasdaq}% | S&P ${globalSp}%`;
+    updateSignalElement(globalSentimentResultEl, globalMarket.signal || "NEUTRAL");
+
+    giftNiftyResultEl.textContent = `${giftNifty.signal || "NEUTRAL"} | ${giftNifty.ticker || "GIFTNIFTY"} | ${formatNumber(giftNifty.currentPrice)} (${giftNifty.pointDifference ?? 0} pts)`;
+    updateSignalElement(giftNiftyResultEl, giftNifty.signal || "NEUTRAL");
+
+    optionChainResultEl.textContent = `${optionChain.signal || "NEUTRAL"} | Highest PUT OI ${formatNumber(optionChain.highestPutOI)} vs CALL OI ${formatNumber(optionChain.highestCallOI)}`;
+    updateSignalElement(optionChainResultEl, optionChain.signal || "NEUTRAL");
+
+    pcrRatioResultEl.textContent = `${Number(pcr.value || 0).toFixed(4)} | ${pcr.signal || "NEUTRAL"}`;
+    updateSignalElement(pcrRatioResultEl, pcr.signal || "NEUTRAL");
+
+    supportLevelResultEl.textContent = formatNumber(optionChain.support);
+    resistanceLevelResultEl.textContent = formatNumber(optionChain.resistance);
+
+    fiiActivityResultEl.textContent = `${fiiDii.signal || "NEUTRAL"} | Buy ${formatNumber(fiiDii.fiiBuyValue)} | Sell ${formatNumber(fiiDii.fiiSellValue)} | Net ${formatNumber(fiiDii.fiiNetValue)}`;
+    updateSignalElement(fiiActivityResultEl, fiiDii.signal || "NEUTRAL");
+
+    technicalResultEl.textContent = `${technical.signal || "NEUTRAL"} | RSI ${Number(technical.rsi || 0).toFixed(2)} | MA50 ${formatNumber(technical.ma50)} | MA200 ${formatNumber(technical.ma200)}`;
+    updateSignalElement(technicalResultEl, technical.signal || "NEUTRAL");
+
+    newsSentimentResultEl.textContent = `${news.signal || "NEUTRAL"} | Score ${news.newsScore ?? 0} | Bullish hits ${news.bullishHits ?? 0} | Bearish hits ${news.bearishHits ?? 0}`;
+    updateSignalElement(newsSentimentResultEl, news.signal || "NEUTRAL");
+
+    const headlines = Array.isArray(news.topHeadlines) ? news.topHeadlines : [];
+    newsHeadlinesEl.textContent = headlines.length > 0 ? headlines.join(" | ") : "No headlines available";
+
+    sentimentGeneratedAtEl.textContent = `Generated: ${new Date(data.generatedAt).toLocaleString("en-IN")}`;
+
+    renderSentimentGauge(data.totalScore ?? 0, data.marketSentiment || "NEUTRAL");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected sentiment analysis error";
+    showError(`Unable to run market sentiment analysis. ${message}`);
   }
 }
 

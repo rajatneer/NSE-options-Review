@@ -251,6 +251,97 @@ h1 {
   height: 320px;
 }
 
+.sentiment-panel {
+  margin-top: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 18px;
+  backdrop-filter: blur(8px);
+}
+
+.sentiment-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sentiment-panel-head h2 {
+  margin: 0;
+  font-size: 1.04rem;
+  color: #dbe9f6;
+}
+
+.sentiment-summary-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.sentiment-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.sentiment-card {
+  background: rgba(7, 19, 28, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.sentiment-card h3 {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.sentiment-card p {
+  margin: 8px 0 0;
+  font-size: 0.96rem;
+  color: #d8e7f5;
+  line-height: 1.4;
+}
+
+.sentiment-card p.bull,
+#tomorrowSentiment.bull {
+  color: var(--bull);
+}
+
+.sentiment-card p.bear,
+#tomorrowSentiment.bear {
+  color: var(--bear);
+}
+
+.sentiment-card p.neutral,
+#tomorrowSentiment.neutral {
+  color: var(--neutral);
+}
+
+.sentiment-main-card p.prediction {
+  margin-top: 10px;
+}
+
+.gauge-card {
+  min-height: 190px;
+}
+
+.gauge-card canvas {
+  margin-top: 8px;
+  width: 100%;
+  max-height: 170px;
+}
+
+.headlines-card {
+  margin-top: 12px;
+}
+
 .trade-panel {
   margin-top: 16px;
   background: var(--panel);
@@ -258,21 +349,6 @@ h1 {
   border-radius: 16px;
   padding: 18px;
   backdrop-filter: blur(8px);
-}
-
-.tv-panel {
-  margin-top: 16px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  padding: 18px;
-  backdrop-filter: blur(8px);
-}
-
-.tv-panel h2 {
-  margin: 0;
-  font-size: 1.04rem;
-  color: #dbe9f6;
 }
 
 .trade-panel h2 {
@@ -365,6 +441,14 @@ h1 {
   .trade-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
+
+  .sentiment-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sentiment-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -377,6 +461,10 @@ h1 {
   }
 
   .trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sentiment-grid {
     grid-template-columns: 1fr;
   }
 

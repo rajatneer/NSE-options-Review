@@ -75,48 +75,69 @@
         <p id="sourceInfo" class="source-info">Source: Not analyzed</p>
       </section>
 
-      <section class="charts-grid">
-        <article class="chart-card">
-          <h2>Call OI vs Put OI</h2>
-          <canvas id="callPutChart"></canvas>
-        </article>
-        <article class="chart-card">
-          <h2>Strike vs OI</h2>
-          <canvas id="strikeChart"></canvas>
-        </article>
-      </section>
+      <section class="sentiment-panel">
+        <div class="sentiment-panel-head">
+          <h2>Market Sentiment Analyzer (Next Trading Day)</h2>
+          <p id="sentimentGeneratedAt" class="source-info">Generated: Not analyzed</p>
+        </div>
 
-      <section class="tv-panel">
-        <h2>TradingView NIFTY 50 Chart Details</h2>
-        <p class="trade-subtext">
-          Live technical snapshot from TradingView for NSE:NIFTY used in final prediction.
-        </p>
-        <div class="trade-grid">
-          <article class="trade-card trade-factor-card">
-            <h3>Trend Recommendation</h3>
-            <p id="tvTrend">--</p>
+        <div class="sentiment-summary-grid">
+          <article class="sentiment-card sentiment-main-card">
+            <h3>Market Sentiment</h3>
+            <p id="tomorrowSentiment" class="prediction neutral">NEUTRAL</p>
+            <p id="sentimentScoreText" class="market-bias">Score: 0 (Range: -7 to +7)</p>
+            <p id="sentimentColorIndicator" class="market-bias">Color: YELLOW</p>
           </article>
-          <article class="trade-card trade-factor-card">
-            <h3>RSI</h3>
-            <p id="tvRsi">--</p>
-          </article>
-          <article class="trade-card trade-factor-card">
-            <h3>MACD vs Signal</h3>
-            <p id="tvMacd">--</p>
-          </article>
-          <article class="trade-card trade-factor-card">
-            <h3>MA Structure</h3>
-            <p id="tvMa">--</p>
-          </article>
-          <article class="trade-card trade-factor-card">
-            <h3>OHLC</h3>
-            <p id="tvOhlc">--</p>
-          </article>
-          <article class="trade-card trade-factor-card">
-            <h3>Chart Volume & Change</h3>
-            <p id="tvVolume">--</p>
+
+          <article class="sentiment-card gauge-card">
+            <h3>Sentiment Gauge</h3>
+            <canvas id="sentimentGauge"></canvas>
           </article>
         </div>
+
+        <div class="sentiment-grid">
+          <article class="sentiment-card">
+            <h3>Global Markets</h3>
+            <p id="globalSentimentResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>Gift Nifty</h3>
+            <p id="giftNiftyResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>Option Chain</h3>
+            <p id="optionChainResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>PCR Ratio</h3>
+            <p id="pcrRatioResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>Support Level</h3>
+            <p id="supportLevelResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>Resistance Level</h3>
+            <p id="resistanceLevelResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>FII Activity</h3>
+            <p id="fiiActivityResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>Technical Indicators</h3>
+            <p id="technicalResult">--</p>
+          </article>
+          <article class="sentiment-card">
+            <h3>News Sentiment</h3>
+            <p id="newsSentimentResult">--</p>
+          </article>
+        </div>
+
+        <article class="sentiment-card headlines-card">
+          <h3>Top Headlines Used</h3>
+          <p id="newsHeadlines">--</p>
+        </article>
       </section>
 
       <section class="trade-panel">
@@ -161,6 +182,38 @@
           <article class="trade-card trade-factor-card">
             <h3>3. Support & Resistance</h3>
             <p id="tradeSupportResistance">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>4. Volume Flow</h3>
+            <p id="tradeVolumeFlow">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>5. Sentiment Engine</h3>
+            <p id="tradeSentimentEngine">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>6. Option Chain Signal</h3>
+            <p id="tradeOptionChain">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>7. PCR Signal</h3>
+            <p id="tradePcr">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>8. FII / DII</h3>
+            <p id="tradeFiiDii">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>9. Technical Indicators</h3>
+            <p id="tradeTechnical">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>10. News Sentiment</h3>
+            <p id="tradeNews">--</p>
+          </article>
+          <article class="trade-card trade-factor-card">
+            <h3>11. Gift Nifty</h3>
+            <p id="tradeGiftNifty">--</p>
           </article>
         </div>
 

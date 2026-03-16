@@ -2,6 +2,7 @@ const path = require("path");
 const express = require("express");
 const axios = require("axios");
 const { analyzeMarket } = require("./analysis");
+const { createMarketSentimentService } = require("./marketSentimentService");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,7 +12,6 @@ const API_PATH = "/api/option-chain-indices?symbol=NIFTY";
 const SNAPSHOT_CONTRACTS_PATH = "/api/snapshot-derivatives-equity?index=contracts&limit=5000";
 const SNAPSHOT_OI_PATH = "/api/snapshot-derivatives-equity?index=oi&limit=5000";
 const STOOQ_BASE_URL = "https://stooq.com";
-const TRADINGVIEW_SCANNER_URL = "https://scanner.tradingview.com/india/scan";
 const OPTION_CHAIN_CACHE_TTL_MS = 20 * 60 * 1000;
 
 let optionChainCache = null;
@@ -24,28 +24,6 @@ const GLOBAL_INDEX_SYMBOLS = [
   { symbol: "^dax", label: "DAX" },
   { symbol: "^hsi", label: "Hang Seng" },
   { symbol: "^nkx", label: "Nikkei 225" }
-];
-
-const TRADINGVIEW_COLUMNS = [
-  "Recommend.All",
-  "Recommend.MA",
-  "Recommend.Other",
-  "open",
-  "high",
-  "low",
-  "close",
-  "change",
-  "volume",
-  "RSI",
-  "MACD.macd",
-  "MACD.signal",
-  "EMA20",
-  "EMA50",
-  "EMA200",
-  "SMA20",
-  "SMA50",
-  "SMA200",
-  "VWAP"
 ];
 
 function sleep(ms) {
@@ -132,115 +110,6 @@ function parseStooqQuote(rawLine, label) {
     }
 
     throw new Error("Stooq quote parsing failed with unknown error");
-  }
-}
-
-function toFiniteNumber(value) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function mapRecommendationLabel(value) {
-  if (value >= 0.5) {
-    return "STRONG_BUY";
-  }
-
-  if (value >= 0.1) {
-    return "BUY";
-  }
-
-  if (value <= -0.5) {
-    return "STRONG_SELL";
-  }
-
-  if (value <= -0.1) {
-    return "SELL";
-  }
-
-  return "NEUTRAL";
-}
-
-async function fetchTradingViewChartDetails() {
-  try {
-    const response = await axios.post(
-      TRADINGVIEW_SCANNER_URL,
-      {
-        symbols: {
-          tickers: ["NSE:NIFTY"],
-          query: {
-            types: []
-          }
-        },
-        columns: TRADINGVIEW_COLUMNS
-      },
-      {
-        timeout: 12000,
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "https://in.tradingview.com",
-          Referer: "https://in.tradingview.com/"
-        },
-        validateStatus: (status) => status >= 200 && status < 500
-      }
-    );
-
-    const row = response.data?.data?.[0]?.d;
-    if (response.status !== 200 || !Array.isArray(row) || row.length < 19) {
-      throw new Error(`TradingView scanner returned invalid payload (${response.status})`);
-    }
-
-    const recommendationValue = toFiniteNumber(row[0]);
-
-    return {
-      source: "TRADINGVIEW",
-      recommendationValue,
-      recommendationLabel: mapRecommendationLabel(recommendationValue),
-      recommendationMA: toFiniteNumber(row[1]),
-      recommendationOsc: toFiniteNumber(row[2]),
-      open: toFiniteNumber(row[3]),
-      high: toFiniteNumber(row[4]),
-      low: toFiniteNumber(row[5]),
-      close: toFiniteNumber(row[6]),
-      changePercent: toFiniteNumber(row[7]),
-      volume: toFiniteNumber(row[8]),
-      rsi: toFiniteNumber(row[9]),
-      macdValue: toFiniteNumber(row[10]),
-      macdSignal: toFiniteNumber(row[11]),
-      ema20: toFiniteNumber(row[12]),
-      ema50: toFiniteNumber(row[13]),
-      ema200: toFiniteNumber(row[14]),
-      sma20: toFiniteNumber(row[15]),
-      sma50: toFiniteNumber(row[16]),
-      sma200: toFiniteNumber(row[17]),
-      vwap: toFiniteNumber(row[18]),
-      fetchedAt: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error("[TRADINGVIEW_FETCH_ERROR]", error);
-    return {
-      source: "TRADINGVIEW_UNAVAILABLE",
-      recommendationValue: 0,
-      recommendationLabel: "NEUTRAL",
-      recommendationMA: 0,
-      recommendationOsc: 0,
-      open: 0,
-      high: 0,
-      low: 0,
-      close: 0,
-      changePercent: 0,
-      volume: 0,
-      rsi: 0,
-      macdValue: 0,
-      macdSignal: 0,
-      ema20: 0,
-      ema50: 0,
-      ema200: 0,
-      sma20: 0,
-      sma50: 0,
-      sma200: 0,
-      vwap: 0,
-      fetchedAt: new Date().toISOString()
-    };
   }
 }
 
@@ -597,6 +466,19 @@ async function fetchNseOptionChain() {
   }
 }
 
+const marketSentimentService = createMarketSentimentService({
+  fetchNseOptionChain
+});
+
+function handleApiError(res, scope, error) {
+  const message = error instanceof Error ? error.message : `Unexpected ${scope} error`;
+  console.error(`[${scope.toUpperCase()}_ERROR]`, message, error);
+  res.status(500).json({
+    error: `${scope} failed`,
+    details: message
+  });
+}
+
 app.use(express.static(path.join(__dirname, "..", "client")));
 
 app.get("/health", (req, res) => {
@@ -618,16 +500,16 @@ app.get("/health", (req, res) => {
 
 app.get("/analyze", async (req, res) => {
   try {
-    const [nseResponse, globalSentiment, chartDetails] = await Promise.all([
+    const [nseResponse, globalSentiment, sentimentEngine] = await Promise.all([
       fetchNseOptionChain(),
       fetchGlobalSentiment(),
-      fetchTradingViewChartDetails()
+      marketSentimentService.getFinalSentiment()
     ]);
 
     const analysis = analyzeMarket(nseResponse.payload, {
       globalSentiment,
-      dataSource: nseResponse.source,
-      chartDetails
+      marketSentimentAnalyzer: sentimentEngine,
+      dataSource: nseResponse.source
     });
 
     res.json({
@@ -645,8 +527,7 @@ app.get("/analyze", async (req, res) => {
       buildupSignal: analysis.buildupSignal,
       buildupMode: analysis.buildupMode,
       tradeSetup: analysis.tradeSetup,
-      chartSignal: analysis.chartSignal,
-      chartDetails: analysis.chartDetails,
+      marketSentimentAnalyzer: analysis.marketSentimentAnalyzer,
       globalSentiment: analysis.globalSentiment,
       dataQuality: analysis.dataQuality,
       currentPrice: analysis.currentPrice,
@@ -666,6 +547,69 @@ app.get("/analyze", async (req, res) => {
       error: "Analysis failed",
       details: message
     });
+  }
+});
+
+app.get("/api/global-sentiment", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getGlobalSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "global-sentiment", error);
+  }
+});
+
+app.get("/api/gift-nifty", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getGiftNiftySentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "gift-nifty", error);
+  }
+});
+
+app.get("/api/option-chain", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getOptionChainSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "option-chain", error);
+  }
+});
+
+app.get("/api/fii-dii", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getFiiDiiSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "fii-dii", error);
+  }
+});
+
+app.get("/api/technical-indicators", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getTechnicalIndicatorsSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "technical-indicators", error);
+  }
+});
+
+app.get("/api/news-sentiment", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getNewsSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "news-sentiment", error);
+  }
+});
+
+app.get("/api/final-sentiment", async (req, res) => {
+  try {
+    const payload = await marketSentimentService.getFinalSentiment();
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "final-sentiment", error);
   }
 });
 

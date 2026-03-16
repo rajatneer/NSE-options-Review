@@ -44,71 +44,135 @@ function assessDataQuality(strikeData, source = "UNKNOWN") {
   }
 }
 
-function deriveChartSignal(chartDetails = {}) {
+function deriveOptionChainSignal({
+  pcr,
+  callBuildup,
+  putBuildup,
+  currentPrice,
+  support,
+  resistance
+}) {
   try {
-    const recommendationValue = toNumber(chartDetails.recommendationValue);
-    const rsi = toNumber(chartDetails.rsi);
-    const macdValue = toNumber(chartDetails.macdValue);
-    const macdSignal = toNumber(chartDetails.macdSignal);
-    const close = toNumber(chartDetails.close);
-    const ema20 = toNumber(chartDetails.ema20);
-    const ema50 = toNumber(chartDetails.ema50);
-    const ema200 = toNumber(chartDetails.ema200);
+    const normalizedPcr = toNumber(pcr);
+    const normalizedCallBuildup = toNumber(callBuildup);
+    const normalizedPutBuildup = toNumber(putBuildup);
+    const normalizedCurrent = toNumber(currentPrice);
+    const normalizedSupport = toNumber(support);
+    const normalizedResistance = toNumber(resistance);
 
-    let score = 0;
-
-    if (recommendationValue >= 0.2) {
-      score += 2;
-    } else if (recommendationValue <= -0.2) {
-      score -= 2;
+    let pcrBias = "NEUTRAL";
+    if (normalizedPcr >= 1.1) {
+      pcrBias = "BULLISH";
+    } else if (normalizedPcr <= 0.9) {
+      pcrBias = "BEARISH";
     }
 
-    if (rsi >= 60) {
-      score += 1;
-    } else if (rsi <= 40) {
-      score -= 1;
+    let buildupBias = "NEUTRAL";
+    if (normalizedPutBuildup > normalizedCallBuildup * 1.05) {
+      buildupBias = "BULLISH";
+    } else if (normalizedCallBuildup > normalizedPutBuildup * 1.05) {
+      buildupBias = "BEARISH";
     }
 
-    if (macdValue > macdSignal) {
-      score += 1;
-    } else if (macdValue < macdSignal) {
-      score -= 1;
+    const distanceToSupport =
+      normalizedSupport > 0 && normalizedCurrent > normalizedSupport
+        ? normalizedCurrent - normalizedSupport
+        : 0;
+
+    const distanceToResistance =
+      normalizedResistance > normalizedCurrent
+        ? normalizedResistance - normalizedCurrent
+        : 0;
+
+    let structureBias = "NEUTRAL";
+    if (distanceToSupport > 0 && distanceToResistance > 0) {
+      if (distanceToResistance <= distanceToSupport * 0.8) {
+        structureBias = "BEARISH";
+      } else if (distanceToSupport <= distanceToResistance * 0.8) {
+        structureBias = "BULLISH";
+      }
     }
 
-    if (close > ema20 && ema20 > ema50 && ema50 > ema200) {
-      score += 1;
-    } else if (close < ema20 && ema20 < ema50 && ema50 < ema200) {
-      score -= 1;
-    }
+    const scoreMap = {
+      BULLISH: 1,
+      BEARISH: -1,
+      NEUTRAL: 0
+    };
+
+    const score =
+      scoreMap[pcrBias] +
+      scoreMap[buildupBias] +
+      scoreMap[structureBias];
 
     let bias = "NEUTRAL";
-    if (score >= 2) {
+    if (score > 0) {
       bias = "BULLISH";
-    } else if (score <= -2) {
+    } else if (score < 0) {
       bias = "BEARISH";
     }
 
     return {
       bias,
       score,
-      recommendationValue,
-      recommendationLabel: chartDetails.recommendationLabel || "NEUTRAL"
+      pcrBias,
+      buildupBias,
+      structureBias,
+      distanceToSupport: Number(distanceToSupport.toFixed(2)),
+      distanceToResistance: Number(distanceToResistance.toFixed(2))
     };
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Chart signal derivation failed: ${error.message}`);
+      throw new Error(`Option-chain signal derivation failed: ${error.message}`);
     }
 
-    throw new Error("Chart signal derivation failed with unknown error");
+    throw new Error("Option-chain signal derivation failed with unknown error");
   }
+}
+
+function normalizeSentimentEngine(signal) {
+  try {
+    if (typeof signal !== "string") {
+      throw new TypeError("Sentiment engine signal must be a string");
+    }
+
+    const normalized = signal.trim().toUpperCase();
+    if (normalized === "BULLISH" || normalized === "BEARISH" || normalized === "NEUTRAL") {
+      return normalized;
+    }
+
+    return "NEUTRAL";
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return "NEUTRAL";
+    }
+
+    return "NEUTRAL";
+  }
+}
+
+function signalToScore(signal) {
+  const normalized = normalizeSentimentEngine(signal);
+
+  if (normalized === "BULLISH") {
+    return 1;
+  }
+
+  if (normalized === "BEARISH") {
+    return -1;
+  }
+
+  return 0;
 }
 
 function buildPredictionReason({
   prediction,
   marketBias,
+  pcr,
+  optionChainSignal,
   buildupSignal,
   volumeBias,
-  chartSignal,
+  marketSentimentSignal,
+  marketSentimentScore,
   volumeRatio,
   totalCallVolume,
   totalPutVolume,
@@ -124,18 +188,18 @@ function buildPredictionReason({
 
     const volumeText = `Put volume ${Math.round(totalPutVolume).toLocaleString("en-IN")} vs Call volume ${Math.round(totalCallVolume).toLocaleString("en-IN")} (PVCR ${Number(volumeRatio).toFixed(2)})`;
     const buildupText = `Call buildup ${Math.round(callBuildup).toLocaleString("en-IN")} vs Put buildup ${Math.round(putBuildup).toLocaleString("en-IN")}`;
-
-    const chartText = `Chart bias ${chartSignal?.bias || "NEUTRAL"} (TV ${chartSignal?.recommendationLabel || "NEUTRAL"}, score ${toNumber(chartSignal?.score)})`;
+    const optionText = `PCR ${Number(pcr).toFixed(2)}, structure ${optionChainSignal?.structureBias || "NEUTRAL"}, buildup ${optionChainSignal?.buildupBias || "NEUTRAL"}`;
+    const sentimentText = `Sentiment engine ${marketSentimentSignal} (score ${toNumber(marketSentimentScore)})`;
 
     if (prediction === "UP") {
-      return `${qualityPrefix}${volumeText} with ${chartText} and ${buildupSignal.toLowerCase()} (${buildupText}) supports upside bias ${marketBias.toUpperCase()}, so market is likely to move UP.`;
+      return `${qualityPrefix}${volumeText} combined with ${sentimentText} indicates upside, giving ${marketBias.toUpperCase()}. Context: ${optionText} with ${buildupSignal.toLowerCase()} (${buildupText}). Final view: UP.`;
     }
 
     if (prediction === "DOWN") {
-      return `${qualityPrefix}${volumeText} with ${chartText} and ${buildupSignal.toLowerCase()} (${buildupText}) supports downside bias ${marketBias.toUpperCase()}, so market is likely to move DOWN.`;
+      return `${qualityPrefix}${volumeText} combined with ${sentimentText} indicates downside, giving ${marketBias.toUpperCase()}. Context: ${optionText} with ${buildupSignal.toLowerCase()} (${buildupText}). Final view: DOWN.`;
     }
 
-    return `${qualityPrefix}${volumeText} and ${chartText} are mixed (volume bias ${volumeBias}), with ${buildupSignal.toLowerCase()} (${buildupText}), so market is likely SIDEWAYS.`;
+    return `${qualityPrefix}Volume bias ${volumeBias} and sentiment engine ${marketSentimentSignal} are mixed, so direction is SIDEWAYS. Context: ${optionText} with ${buildupSignal.toLowerCase()} (${buildupText}), sentiment score ${toNumber(marketSentimentScore)}.`;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Prediction reason generation failed: ${error.message}`);
@@ -244,6 +308,9 @@ function buildTradeSetup({
   currentPrice,
   prediction,
   buildupSignal,
+  volumeBias,
+  optionChainSignal,
+  marketSentimentAnalyzer,
   totals,
   support,
   resistance,
@@ -255,7 +322,8 @@ function buildTradeSetup({
       throw new TypeError("Strike data is required to build trade setup");
     }
 
-    const callPressureFlow = toNumber(totals.totalCallVolume) + Math.max(toNumber(totals.totalCallChangeOI), 0);
+    const callPressureFlow =
+      toNumber(totals.totalCallVolume) + Math.max(toNumber(totals.totalCallChangeOI), 0);
     const putPressureFlow = toNumber(totals.totalPutVolume) + Math.max(toNumber(totals.totalPutChangeOI), 0);
 
     let flowBias = "NEUTRAL";
@@ -302,6 +370,24 @@ function buildTradeSetup({
       ? globalSentiment.bias
       : "NEUTRAL";
 
+    const normalizedVolumeBias = normalizeSentimentEngine(volumeBias);
+    const normalizedOptionChainBias = normalizeSentimentEngine(optionChainSignal?.bias);
+    const normalizedPcrBias = normalizeSentimentEngine(optionChainSignal?.pcrBias);
+    const normalizedMarketSentiment = normalizeSentimentEngine(
+      marketSentimentAnalyzer?.marketSentiment
+    );
+    const marketSentimentScore = toNumber(marketSentimentAnalyzer?.totalScore);
+
+    const sentimentEngineSignals = marketSentimentAnalyzer?.signals || {};
+    const sentimentEngineDetails = marketSentimentAnalyzer?.details || {};
+
+    const fiiDiiSignal = normalizeSentimentEngine(sentimentEngineDetails?.fiiDii?.signal);
+    const technicalSignal = normalizeSentimentEngine(
+      sentimentEngineDetails?.technicalIndicators?.signal
+    );
+    const newsSignal = normalizeSentimentEngine(sentimentEngineDetails?.newsSentiment?.signal);
+    const giftNiftySignal = normalizeSentimentEngine(sentimentEngineDetails?.giftNifty?.signal);
+
     let supportResistanceSignal = "NEUTRAL";
     if (upsideRoom >= 15 && upsideRoom > downsideRoom * 1.15) {
       supportResistanceSignal = "BULLISH";
@@ -309,26 +395,45 @@ function buildTradeSetup({
       supportResistanceSignal = "BEARISH";
     }
 
-    const signalSet = [
-      prediction === "UP" ? "BULLISH" : prediction === "DOWN" ? "BEARISH" : "NEUTRAL",
+    const predictionSignal =
+      prediction === "UP" ? "BULLISH" : prediction === "DOWN" ? "BEARISH" : "NEUTRAL";
+    const buildupPressureSignal =
       buildupSignal === "Bullish pressure"
         ? "BULLISH"
         : buildupSignal === "Bearish pressure"
           ? "BEARISH"
-          : "NEUTRAL",
-      flowBias,
-      marketStructureSignal,
-      normalizedGlobalBias,
-      supportResistanceSignal
+          : "NEUTRAL";
+
+    const weightedComponents = [
+      { name: "prediction", signal: predictionSignal, weight: 1.5 },
+      { name: "volumeBias", signal: normalizedVolumeBias, weight: 2 },
+      { name: "marketSentiment", signal: normalizedMarketSentiment, weight: 2 },
+      { name: "optionChain", signal: normalizedOptionChainBias, weight: 1 },
+      { name: "pcr", signal: normalizedPcrBias, weight: 1 },
+      { name: "buildup", signal: buildupPressureSignal, weight: 1 },
+      { name: "flow", signal: flowBias, weight: 1 },
+      { name: "marketStructure", signal: marketStructureSignal, weight: 1 },
+      { name: "global", signal: normalizedGlobalBias, weight: 1 },
+      { name: "supportResistance", signal: supportResistanceSignal, weight: 1 },
+      { name: "fiiDii", signal: fiiDiiSignal, weight: 1 },
+      { name: "technical", signal: technicalSignal, weight: 1 },
+      { name: "news", signal: newsSignal, weight: 1 },
+      { name: "giftNifty", signal: giftNiftySignal, weight: 0.5 }
     ];
 
-    const bullishVotes = signalSet.filter((signal) => signal === "BULLISH").length;
-    const bearishVotes = signalSet.filter((signal) => signal === "BEARISH").length;
+    const weightedScore = weightedComponents.reduce(
+      (sum, item) => sum + signalToScore(item.signal) * item.weight,
+      0
+    );
+
+    const allSignalsForVotes = weightedComponents.map((item) => item.signal);
+    const bullishVotes = allSignalsForVotes.filter((signal) => signal === "BULLISH").length;
+    const bearishVotes = allSignalsForVotes.filter((signal) => signal === "BEARISH").length;
 
     let directionalBias = "SIDEWAYS";
-    if (bullishVotes >= 3 && bullishVotes > bearishVotes) {
+    if (weightedScore >= 3) {
       directionalBias = "UP";
-    } else if (bearishVotes >= 3 && bearishVotes > bullishVotes) {
+    } else if (weightedScore <= -3) {
       directionalBias = "DOWN";
     }
 
@@ -399,14 +504,45 @@ function buildTradeSetup({
     const supportResistanceDetail =
       `Support ${nearestSupport}, Resistance ${nearestResistance}, Upside room ${upsideRoom.toFixed(2)}, Downside room ${downsideRoom.toFixed(2)}.`;
 
+    const volumeFlowDetail =
+      `Volume bias ${normalizedVolumeBias}, Call flow ${Math.round(callPressureFlow).toLocaleString("en-IN")}, Put flow ${Math.round(putPressureFlow).toLocaleString("en-IN")}.`;
+
+    const sentimentSignals = Object.values(sentimentEngineSignals).map((signal) =>
+      normalizeSentimentEngine(signal)
+    );
+    const sentimentBullishVotes = sentimentSignals.filter((signal) => signal === "BULLISH").length;
+    const sentimentBearishVotes = sentimentSignals.filter((signal) => signal === "BEARISH").length;
+    const sentimentNeutralVotes = sentimentSignals.filter((signal) => signal === "NEUTRAL").length;
+
+    const sentimentEngineDetail =
+      `Overall ${normalizedMarketSentiment} (score ${marketSentimentScore}), Bullish ${sentimentBullishVotes}, Bearish ${sentimentBearishVotes}, Neutral ${sentimentNeutralVotes}.`;
+
+    const optionChainDetail =
+      `Option chain ${normalizedOptionChainBias}, structure ${optionChainSignal?.structureBias || "NEUTRAL"}, buildup ${optionChainSignal?.buildupBias || "NEUTRAL"}.`;
+
+    const pcrDetail =
+      `PCR signal ${normalizedPcrBias} based on option-chain structure inputs.`;
+
+    const fiiDetail =
+      `FII net ${Math.round(toNumber(sentimentEngineDetails?.fiiDii?.fiiNetValue)).toLocaleString("en-IN")}, signal ${fiiDiiSignal}.`;
+
+    const technicalDetail =
+      `Technicals ${technicalSignal} with RSI ${toNumber(sentimentEngineDetails?.technicalIndicators?.rsi).toFixed(2)} and MA50 ${toNumber(sentimentEngineDetails?.technicalIndicators?.ma50).toFixed(2)}.`;
+
+    const newsDetail =
+      `News score ${toNumber(sentimentEngineDetails?.newsSentiment?.newsScore)}, bullish hits ${toNumber(sentimentEngineDetails?.newsSentiment?.bullishHits)}, bearish hits ${toNumber(sentimentEngineDetails?.newsSentiment?.bearishHits)}.`;
+
+    const giftNiftyDetail =
+      `Gift Nifty ${giftNiftySignal}, move ${toNumber(sentimentEngineDetails?.giftNifty?.pointDifference).toFixed(2)} points.`;
+
     const rationale =
       action === "SPOT BUY (NIFTY)"
-        ? "Safe spot BUY setup: market structure, global sentiment, and support/resistance room align on the upside."
+        ? "Safe spot BUY setup: weighted score from all available website signals supports upside with required room and risk limits."
         : action === "SPOT SELL (NIFTY)"
-          ? "Safe spot SELL setup: market structure, global sentiment, and support/resistance room align on the downside."
+          ? "Safe spot SELL setup: weighted score from all available website signals supports downside with required room and risk limits."
           : !dataQuality?.isReliable
             ? "No safe trade: fallback data depth is incomplete, so setup confidence is intentionally reduced."
-            : "No safe trade: core factors are not aligned or room-to-target is below the 10-point safety threshold.";
+            : "No safe trade: all-signal weighted score and room-to-target do not meet the 10-15 point safety criteria.";
 
     return {
       action,
@@ -423,7 +559,9 @@ function buildTradeSetup({
       flowBias,
       callPressureFlow,
       putPressureFlow,
-      confidenceScore: Math.abs(bullishVotes - bearishVotes),
+      confidenceScore: Number(Math.abs(weightedScore).toFixed(2)),
+      weightedDecisionScore: Number(weightedScore.toFixed(2)),
+      weightedDecisionThreshold: 3,
       rationale,
       factors: {
         marketStructure: {
@@ -442,6 +580,39 @@ function buildTradeSetup({
           upsideRoom: Number(upsideRoom.toFixed(2)),
           downsideRoom: Number(downsideRoom.toFixed(2)),
           detail: supportResistanceDetail
+        },
+        volumeFlow: {
+          signal: normalizedVolumeBias,
+          detail: volumeFlowDetail
+        },
+        sentimentEngine: {
+          signal: normalizedMarketSentiment,
+          score: marketSentimentScore,
+          detail: sentimentEngineDetail
+        },
+        optionChain: {
+          signal: normalizedOptionChainBias,
+          detail: optionChainDetail
+        },
+        pcr: {
+          signal: normalizedPcrBias,
+          detail: pcrDetail
+        },
+        fiiDii: {
+          signal: fiiDiiSignal,
+          detail: fiiDetail
+        },
+        technicalIndicators: {
+          signal: technicalSignal,
+          detail: technicalDetail
+        },
+        newsSentiment: {
+          signal: newsSignal,
+          detail: newsDetail
+        },
+        giftNifty: {
+          signal: giftNiftySignal,
+          detail: giftNiftyDetail
         }
       }
     };
@@ -526,7 +697,10 @@ function analyzeMarket(rawData, context = {}) {
     const volumeRatio =
       totals.totalCallVolume === 0 ? 0 : totals.totalPutVolume / totals.totalCallVolume;
     const volumeBias = volumeRatio > 1.15 ? "BULLISH" : volumeRatio < 0.85 ? "BEARISH" : "NEUTRAL";
-    const chartSignal = deriveChartSignal(context?.chartDetails || {});
+    const marketSentimentSignal = normalizeSentimentEngine(
+      context?.marketSentimentAnalyzer?.marketSentiment
+    );
+    const marketSentimentScore = toNumber(context?.marketSentimentAnalyzer?.totalScore);
 
     const resistance = strikeData.reduce((prev, current) =>
       current.callOI > prev.callOI ? current : prev
@@ -560,22 +734,30 @@ function analyzeMarket(rawData, context = {}) {
     const callBuildup = isChangeOiUnavailable ? callBuildupFromVolume : callBuildupFromChange;
     const putBuildup = isChangeOiUnavailable ? putBuildupFromVolume : putBuildupFromChange;
 
+    const optionChainSignal = deriveOptionChainSignal({
+      pcr,
+      callBuildup,
+      putBuildup,
+      currentPrice,
+      support: support.strikePrice,
+      resistance: resistance.strikePrice
+    });
+
     let marketBias = "Sideways";
     let prediction = "SIDEWAYS";
 
-    let combinedBias = "NEUTRAL";
-    if (volumeBias === chartSignal.bias && volumeBias !== "NEUTRAL") {
-      combinedBias = volumeBias;
-    } else if (volumeBias !== "NEUTRAL" && chartSignal.bias === "NEUTRAL") {
-      combinedBias = volumeBias;
-    } else if (chartSignal.bias !== "NEUTRAL" && volumeBias === "NEUTRAL") {
-      combinedBias = chartSignal.bias;
-    }
+    const scoreMap = {
+      BULLISH: 1,
+      BEARISH: -1,
+      NEUTRAL: 0
+    };
 
-    if (combinedBias === "BULLISH") {
+    const blendedDirectionalScore = scoreMap[volumeBias] + scoreMap[marketSentimentSignal];
+
+    if (blendedDirectionalScore > 0) {
       marketBias = "Bullish";
       prediction = "UP";
-    } else if (combinedBias === "BEARISH") {
+    } else if (blendedDirectionalScore < 0) {
       marketBias = "Bearish";
       prediction = "DOWN";
     }
@@ -583,8 +765,16 @@ function analyzeMarket(rawData, context = {}) {
     let predictionConfidence = "MEDIUM";
     if (!dataQuality.isReliable) {
       predictionConfidence = "LOW";
-    } else if (combinedBias !== "NEUTRAL" && volumeBias === chartSignal.bias) {
+    } else if (
+      volumeBias !== "NEUTRAL" &&
+      marketSentimentSignal !== "NEUTRAL" &&
+      volumeBias === marketSentimentSignal
+    ) {
       predictionConfidence = "HIGH";
+    } else if (volumeBias !== "NEUTRAL" || marketSentimentSignal !== "NEUTRAL") {
+      predictionConfidence = "MEDIUM";
+    } else {
+      predictionConfidence = "LOW";
     }
 
     if (!dataQuality.isReliable) {
@@ -601,8 +791,11 @@ function analyzeMarket(rawData, context = {}) {
     const predictionReason = buildPredictionReason({
       prediction,
       marketBias,
+      pcr,
+      optionChainSignal,
       volumeBias,
-      chartSignal,
+      marketSentimentSignal,
+      marketSentimentScore,
       buildupSignal,
       volumeRatio,
       totalCallVolume: totals.totalCallVolume,
@@ -625,6 +818,9 @@ function analyzeMarket(rawData, context = {}) {
       currentPrice,
       prediction,
       buildupSignal,
+      volumeBias,
+      optionChainSignal,
+      marketSentimentAnalyzer: context?.marketSentimentAnalyzer,
       totals,
       support: support.strikePrice,
       resistance: resistance.strikePrice,
@@ -643,13 +839,16 @@ function analyzeMarket(rawData, context = {}) {
       prediction,
       marketBias,
       predictionConfidence,
-      predictionBasis: "VOLUME_FLOW + CHART_SIGNAL",
+      predictionBasis: "VOLUME_FLOW + MARKET_SENTIMENT_ANALYZER",
       predictionReason,
       buildupSignal,
       buildupMode: isChangeOiUnavailable ? "VOLUME_PROXY" : "CHANGE_IN_OI",
       tradeSetup,
-      chartSignal,
-      chartDetails: context?.chartDetails || null,
+      optionChainSignal,
+      marketSentimentAnalyzer: {
+        marketSentiment: marketSentimentSignal,
+        totalScore: marketSentimentScore
+      },
       globalSentiment: normalizedGlobalSentiment,
       dataQuality,
       totals,
