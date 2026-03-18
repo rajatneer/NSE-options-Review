@@ -346,10 +346,17 @@ function evaluateNewsKeywords(headlines) {
   }
 }
 
-async function fetchTradingViewRows(tickers, columns) {
+async function fetchTradingViewRows(tickers, columns, screener = "india") {
   try {
+    const normalizedScreener =
+      typeof screener === "string" && screener.trim() !== "" ? screener.trim().toLowerCase() : "india";
+    const scannerUrl =
+      normalizedScreener === "india"
+        ? TRADINGVIEW_SCANNER_URL
+        : `https://scanner.tradingview.com/${normalizedScreener}/scan`;
+
     const response = await axios.post(
-      TRADINGVIEW_SCANNER_URL,
+      scannerUrl,
       {
         symbols: {
           tickers,
@@ -506,14 +513,42 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
 
   async function getGiftNiftySentiment() {
     try {
-      const rows = await fetchTradingViewRows(
-        ["NSEIX:GIFTNIFTY", "NSEIX:GIFTNIFTY1!", "NSE:GIFTNIFTY", "SGX:SGXNIFTY", "SGX:SGXNIFTY1!"],
-        ["name", "close", "change", "open", "high", "low"]
-      );
+      const giftTickers = [
+        "NSEIX:GIFTNIFTY",
+        "NSEIX:GIFTNIFTY1!",
+        "NSE:GIFTNIFTY",
+        "SGX:SGXNIFTY",
+        "SGX:SGXNIFTY1!"
+      ];
 
-      const selected = rows.find((row) => Array.isArray(row?.d) && Number.isFinite(Number(row.d[1])));
+      const quoteColumns = ["name", "close", "change", "open", "high", "low"];
+
+      let selected = null;
+      let source = "TRADINGVIEW";
+
+      try {
+        const rows = await fetchTradingViewRows(giftTickers, quoteColumns, "india");
+        selected = rows.find((row) => Array.isArray(row?.d) && Number.isFinite(Number(row.d[1])));
+      } catch (error) {
+        selected = null;
+      }
+
       if (!selected) {
-        throw new RangeError("Gift Nifty symbol was not available from TradingView scanner");
+        try {
+          const fallbackRows = await fetchTradingViewRows(
+            ["NSE:NIFTY1!", "NSE:NIFTY", "NSE:NIFTY2!"],
+            quoteColumns,
+            "global"
+          );
+          selected = fallbackRows.find((row) => Array.isArray(row?.d) && Number.isFinite(Number(row.d[1])));
+          source = "TRADINGVIEW_GLOBAL_NIFTY_FUTURES_PROXY";
+        } catch (error) {
+          selected = null;
+        }
+      }
+
+      if (!selected) {
+        throw new RangeError("Gift Nifty symbol was not available from TradingView scanner (india/global)");
       }
 
       const currentPrice = toFiniteNumber(selected.d[1]);
@@ -534,7 +569,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
       return {
         signal,
         score: signalToScore(signal),
-        source: "TRADINGVIEW",
+        source,
         ticker: selected.s || "UNKNOWN",
         currentPrice,
         previousClose,

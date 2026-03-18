@@ -381,6 +381,10 @@ function buildTradeSetup({
     const sentimentEngineSignals = marketSentimentAnalyzer?.signals || {};
     const sentimentEngineDetails = marketSentimentAnalyzer?.details || {};
 
+    const sentimentGlobalSignal = normalizeSentimentEngine(sentimentEngineSignals?.globalMarket);
+    const sentimentOptionChainSignal = normalizeSentimentEngine(sentimentEngineSignals?.optionChain);
+    const sentimentPcrSignal = normalizeSentimentEngine(sentimentEngineSignals?.pcr);
+
     const fiiDiiSignal = normalizeSentimentEngine(sentimentEngineDetails?.fiiDii?.signal);
     const technicalSignal = normalizeSentimentEngine(
       sentimentEngineDetails?.technicalIndicators?.signal
@@ -410,6 +414,9 @@ function buildTradeSetup({
       { name: "marketSentiment", signal: normalizedMarketSentiment, weight: 2 },
       { name: "optionChain", signal: normalizedOptionChainBias, weight: 1 },
       { name: "pcr", signal: normalizedPcrBias, weight: 1 },
+      { name: "sentimentGlobal", signal: sentimentGlobalSignal, weight: 0.75 },
+      { name: "sentimentOptionChain", signal: sentimentOptionChainSignal, weight: 0.75 },
+      { name: "sentimentPcr", signal: sentimentPcrSignal, weight: 0.75 },
       { name: "buildup", signal: buildupPressureSignal, weight: 1 },
       { name: "flow", signal: flowBias, weight: 1 },
       { name: "marketStructure", signal: marketStructureSignal, weight: 1 },
@@ -426,19 +433,56 @@ function buildTradeSetup({
       0
     );
 
+    const totalWeight = weightedComponents.reduce((sum, item) => sum + item.weight, 0);
+    const bullishWeight = weightedComponents.reduce(
+      (sum, item) => sum + (item.signal === "BULLISH" ? item.weight : 0),
+      0
+    );
+    const bearishWeight = weightedComponents.reduce(
+      (sum, item) => sum + (item.signal === "BEARISH" ? item.weight : 0),
+      0
+    );
+    const directionalEdge = bullishWeight - bearishWeight;
+    const confluenceRatio =
+      totalWeight > 0 ? Number((Math.max(bullishWeight, bearishWeight) / totalWeight).toFixed(3)) : 0;
+
     const allSignalsForVotes = weightedComponents.map((item) => item.signal);
     const bullishVotes = allSignalsForVotes.filter((signal) => signal === "BULLISH").length;
     const bearishVotes = allSignalsForVotes.filter((signal) => signal === "BEARISH").length;
 
     let directionalBias = "SIDEWAYS";
-    if (weightedScore >= 3) {
+    if (directionalEdge >= 2.5 && confluenceRatio >= 0.56) {
       directionalBias = "UP";
-    } else if (weightedScore <= -3) {
+    } else if (directionalEdge <= -2.5 && confluenceRatio >= 0.56) {
       directionalBias = "DOWN";
     }
 
-    if (!dataQuality?.isReliable) {
+    const coreNames = [
+      "prediction",
+      "volumeBias",
+      "marketSentiment",
+      "optionChain",
+      "pcr",
+      "flow",
+      "marketStructure",
+      "supportResistance"
+    ];
+    const coreComponents = weightedComponents.filter((item) => coreNames.includes(item.name));
+    const requiredCoreSignal = directionalBias === "UP" ? "BULLISH" : "BEARISH";
+    const coreAlignmentCount =
+      directionalBias === "SIDEWAYS"
+        ? 0
+        : coreComponents.filter((item) => item.signal === requiredCoreSignal).length;
+
+    if (directionalBias !== "SIDEWAYS" && coreAlignmentCount < 4) {
       directionalBias = "SIDEWAYS";
+    }
+
+    if (!dataQuality?.isReliable && directionalBias !== "SIDEWAYS") {
+      const lowQualityPasses = confluenceRatio >= 0.6 && Math.abs(directionalEdge) >= 3.5;
+      if (!lowQualityPasses) {
+        directionalBias = "SIDEWAYS";
+      }
     }
 
     const atmStrike = pickNearestStrike(strikeData, currentPrice);
@@ -459,28 +503,43 @@ function buildTradeSetup({
     let riskTag = "WAIT";
     let confirmationInstrument = "NA";
 
+    const desiredMovePoints = Math.max(10, Math.min(15, Math.round(confluenceRatio * 20)));
+    const stopBufferPoints = Math.max(6, Math.min(8, desiredMovePoints - 4));
+
     if (directionalBias === "UP") {
-      const rawTarget = Math.min(entryLevel + 15, (nearestResistance || entryLevel + 15) - 1);
+      const rawTarget = Math.min(
+        entryLevel + desiredMovePoints,
+        (nearestResistance || entryLevel + desiredMovePoints) - 1
+      );
       const potentialMove = rawTarget - entryLevel;
 
       if (potentialMove >= 10) {
         targetLevel = roundToStep(rawTarget, 0.05);
-        stopLossLevel = roundToStep(Math.max(entryLevel - 8, (nearestSupport || entryLevel - 8) - 2), 0.05);
+        stopLossLevel = roundToStep(
+          Math.max(entryLevel - stopBufferPoints, (nearestSupport || entryLevel - stopBufferPoints) - 2),
+          0.05
+        );
         targetPoints = "10-15";
-        riskTag = "SAFE";
+        riskTag = dataQuality?.isReliable ? "SAFE" : "CAUTIOUS";
         action = "SPOT BUY (NIFTY)";
         optionType = "CE";
         confirmationInstrument = "CALL (CE) flow confirmation";
       }
     } else if (directionalBias === "DOWN") {
-      const rawTarget = Math.max(entryLevel - 15, (nearestSupport || entryLevel - 15) + 1);
+      const rawTarget = Math.max(
+        entryLevel - desiredMovePoints,
+        (nearestSupport || entryLevel - desiredMovePoints) + 1
+      );
       const potentialMove = entryLevel - rawTarget;
 
       if (potentialMove >= 10) {
         targetLevel = roundToStep(rawTarget, 0.05);
-        stopLossLevel = roundToStep(Math.min(entryLevel + 8, (nearestResistance || entryLevel + 8) + 2), 0.05);
+        stopLossLevel = roundToStep(
+          Math.min(entryLevel + stopBufferPoints, (nearestResistance || entryLevel + stopBufferPoints) + 2),
+          0.05
+        );
         targetPoints = "10-15";
-        riskTag = "SAFE";
+        riskTag = dataQuality?.isReliable ? "SAFE" : "CAUTIOUS";
         action = "SPOT SELL (NIFTY)";
         optionType = "PE";
         confirmationInstrument = "PUT (PE) flow confirmation";
@@ -535,14 +594,21 @@ function buildTradeSetup({
     const giftNiftyDetail =
       `Gift Nifty ${giftNiftySignal}, move ${toNumber(sentimentEngineDetails?.giftNifty?.pointDifference).toFixed(2)} points.`;
 
+    const confluenceDetail =
+      `Confluence ${Math.round(confluenceRatio * 100)}%, weighted bull ${bullishWeight.toFixed(2)}, weighted bear ${bearishWeight.toFixed(2)}, core alignment ${coreAlignmentCount}/${coreComponents.length}.`;
+
     const rationale =
       action === "SPOT BUY (NIFTY)"
-        ? "Safe spot BUY setup: weighted score from all available website signals supports upside with required room and risk limits."
+        ? `${dataQuality?.isReliable ? "Safe" : "Cautious"} spot BUY setup: all fetched logic blocks align for upside with valid room and risk limits.${
+            dataQuality?.isReliable ? "" : " Data quality is reduced, so position sizing should be lighter."
+          } ${confluenceDetail}`
         : action === "SPOT SELL (NIFTY)"
-          ? "Safe spot SELL setup: weighted score from all available website signals supports downside with required room and risk limits."
+          ? `${dataQuality?.isReliable ? "Safe" : "Cautious"} spot SELL setup: all fetched logic blocks align for downside with valid room and risk limits.${
+              dataQuality?.isReliable ? "" : " Data quality is reduced, so position sizing should be lighter."
+            } ${confluenceDetail}`
           : !dataQuality?.isReliable
-            ? "No safe trade: fallback data depth is incomplete, so setup confidence is intentionally reduced."
-            : "No safe trade: all-signal weighted score and room-to-target do not meet the 10-15 point safety criteria.";
+            ? `No safe trade: fallback data depth is incomplete, so setup confidence is intentionally reduced. ${confluenceDetail}`
+            : `No safe trade: all-signal confluence and room-to-target did not meet the 10-15 point safety criteria. ${confluenceDetail}`;
 
     return {
       action,
@@ -562,6 +628,7 @@ function buildTradeSetup({
       confidenceScore: Number(Math.abs(weightedScore).toFixed(2)),
       weightedDecisionScore: Number(weightedScore.toFixed(2)),
       weightedDecisionThreshold: 3,
+      confluenceRatio,
       rationale,
       factors: {
         marketStructure: {

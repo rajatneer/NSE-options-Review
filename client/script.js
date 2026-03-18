@@ -20,6 +20,8 @@ const tradeEntryEl = document.getElementById("tradeEntry");
 const tradeStopLossEl = document.getElementById("tradeStopLoss");
 const tradeTargetEl = document.getElementById("tradeTarget");
 const tradePointsEl = document.getElementById("tradePoints");
+const tradeRiskTagEl = document.getElementById("tradeRiskTag");
+const tradeConfluenceEl = document.getElementById("tradeConfluence");
 const tradeMarketStructureEl = document.getElementById("tradeMarketStructure");
 const tradeGlobalSentimentEl = document.getElementById("tradeGlobalSentiment");
 const tradeSupportResistanceEl = document.getElementById("tradeSupportResistance");
@@ -92,6 +94,31 @@ function updateTradeStyle(action) {
     tradeActionEl.classList.add("bear");
   } else {
     tradeActionEl.classList.add("neutral");
+  }
+}
+
+function updateRiskTagStyle(riskTag) {
+  tradeRiskTagEl.classList.remove("risk-safe", "risk-cautious", "risk-wait");
+
+  if (riskTag === "SAFE") {
+    tradeRiskTagEl.classList.add("risk-safe");
+  } else if (riskTag === "CAUTIOUS") {
+    tradeRiskTagEl.classList.add("risk-cautious");
+  } else {
+    tradeRiskTagEl.classList.add("risk-wait");
+  }
+}
+
+function updateConfluenceStyle(confluenceRatio) {
+  tradeConfluenceEl.classList.remove("confluence-high", "confluence-medium", "confluence-low");
+
+  const ratio = Number(confluenceRatio);
+  if (Number.isFinite(ratio) && ratio >= 0.7) {
+    tradeConfluenceEl.classList.add("confluence-high");
+  } else if (Number.isFinite(ratio) && ratio >= 0.55) {
+    tradeConfluenceEl.classList.add("confluence-medium");
+  } else {
+    tradeConfluenceEl.classList.add("confluence-low");
   }
 }
 
@@ -352,6 +379,11 @@ async function runAnalysis() {
     tradeStopLossEl.textContent = tradeSetup.stopLoss !== undefined ? formatNumber(tradeSetup.stopLoss) : "--";
     tradeTargetEl.textContent = tradeSetup.target !== undefined ? formatNumber(tradeSetup.target) : "--";
     tradePointsEl.textContent = tradeSetup.targetPoints || "--";
+    tradeRiskTagEl.textContent = tradeSetup.riskTag || "WAIT";
+    const confluenceRatio = Number(tradeSetup.confluenceRatio);
+    tradeConfluenceEl.textContent = Number.isFinite(confluenceRatio)
+      ? `${Math.round(confluenceRatio * 100)}%`
+      : "--";
     tradeMarketStructureEl.textContent = `${tradeFactors.marketStructure?.signal || "NEUTRAL"} | ${tradeFactors.marketStructure?.detail || "Not available"}`;
     tradeGlobalSentimentEl.textContent = `${tradeFactors.globalSentiment?.signal || "NEUTRAL"} | ${tradeFactors.globalSentiment?.detail || "Not available"}`;
     tradeSupportResistanceEl.textContent = `${tradeFactors.supportResistance?.signal || "NEUTRAL"} | ${tradeFactors.supportResistance?.detail || "Not available"}`;
@@ -371,6 +403,8 @@ async function runAnalysis() {
         : "";
     tradeRationaleEl.textContent = `Rationale: ${tradeSetup.rationale || "Not available"}${executionBasis ? ` | ${executionBasis}` : ""}${confirmation}${weightedScoreText}`;
     updateTradeStyle(tradeSetup.action || "NO TRADE");
+    updateRiskTagStyle(tradeSetup.riskTag || "WAIT");
+    updateConfluenceStyle(tradeSetup.confluenceRatio);
 
     const date = new Date(data.lastUpdated);
     lastUpdated.textContent = `Last update: ${date.toLocaleString("en-IN")}`;

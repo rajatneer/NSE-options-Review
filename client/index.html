@@ -143,7 +143,7 @@
       <section class="trade-panel">
         <h2>Suggested Trade Setup (10-15 Points)</h2>
         <p class="trade-subtext">
-          Generated from call-side vs put-side pressure. Entry, Stop Loss, and Target are Spot NIFTY levels.
+          Generated from all fetched logic blocks (option chain, volume, structure, sentiment, FII/DII, technicals, news, and Gift Nifty). Entry, Stop Loss, and Target are Spot NIFTY levels.
         </p>
 
         <div class="trade-grid">
@@ -170,6 +170,14 @@
           <article class="trade-card">
             <h3>Expected Points</h3>
             <p id="tradePoints">--</p>
+          </article>
+          <article class="trade-card trade-highlight-card">
+            <h3>Risk Tag</h3>
+            <p id="tradeRiskTag" class="risk-wait">WAIT</p>
+          </article>
+          <article class="trade-card trade-highlight-card">
+            <h3>Confluence</h3>
+            <p id="tradeConfluence" class="confluence-low">--</p>
           </article>
           <article class="trade-card trade-factor-card">
             <h3>1. Market Structure</h3>
