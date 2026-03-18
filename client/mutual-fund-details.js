@@ -122,7 +122,7 @@ function readCache(cacheKey) {
 function renderRows(funds) {
   const rows = Array.isArray(funds) ? funds : [];
   if (rows.length === 0) {
-    mfTableBodyEl.innerHTML = '<tr><td colspan="10">No data available.</td></tr>';
+    mfTableBodyEl.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
     return;
   }
 
@@ -131,6 +131,7 @@ function renderRows(funds) {
       const oneYClass = Number(fund.Returns1Y) > 10 ? "mf-high-return" : "";
       const threeYClass = Number(fund.Returns3Y) > 12 ? "mf-high-return" : "";
       const fiveYClass = Number(fund.Returns5Y) > 12 ? "mf-high-return" : "";
+      const reason = String(fund.Reason || fund.WhyRecommended || "-");
       const why = String(fund.WhyRecommended || "-");
 
       return `
@@ -143,6 +144,7 @@ function renderRows(funds) {
           <td>${formatPercent(fund.ExpenseRatio)}</td>
           <td>${formatNumber(fund.AUM, 0)}</td>
           <td class="${riskClass(fund.RiskLevel)}">${escapeHtml(fund.RiskLevel || "--")}</td>
+          <td>${escapeHtml(truncate(reason, 56))}</td>
           <td><span class="mf-why" title="${escapeHtml(why)}">${escapeHtml(truncate(why))}</span></td>
           <td><span class="mf-score-chip">${formatNumber(fund.Score, 0)}</span></td>
         </tr>
@@ -222,7 +224,7 @@ async function loadFunds(options = {}) {
     const message = error instanceof Error ? error.message : "Unable to fetch mutual funds";
     showMfError(`No data available. ${message}`);
     mfMessageEl.textContent = "No data available.";
-    mfTableBodyEl.innerHTML = '<tr><td colspan="10">No data available.</td></tr>';
+    mfTableBodyEl.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
   } finally {
     mfSearchBtn.disabled = false;
   }

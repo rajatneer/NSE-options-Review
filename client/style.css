@@ -172,6 +172,11 @@ body {
   min-height: 42px;
 }
 
+.mf-search-wrap {
+  display: flex;
+  align-items: end;
+}
+
 .mf-high-return {
   color: var(--bull) !important;
   font-weight: 700;

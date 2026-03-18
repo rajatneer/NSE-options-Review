@@ -32,7 +32,6 @@
           </p>
         </div>
         <div class="actions">
-          <button id="mfSearchBtn" class="run-btn">Search Funds</button>
           <p id="mfLastUpdated" class="last-updated">Last update: Not available</p>
         </div>
       </header>
@@ -69,6 +68,9 @@
             <input id="mfHighReturnOnly" type="checkbox" />
             High Return Only
           </label>
+          <div class="mf-search-wrap">
+            <button id="mfSearchBtn" class="run-btn">Search Funds</button>
+          </div>
         </div>
 
         <p id="mfMessage" class="source-info">Loading categories...</p>
@@ -87,13 +89,14 @@
                 <th>Expense</th>
                 <th>AUM (Cr)</th>
                 <th>Risk</th>
+                <th>Reason</th>
                 <th>Why Best</th>
                 <th>Score</th>
               </tr>
             </thead>
             <tbody id="mfTableBody">
               <tr>
-                <td colspan="10">Run search to load mutual funds.</td>
+                <td colspan="11">Run search to load mutual funds.</td>
               </tr>
             </tbody>
           </table>

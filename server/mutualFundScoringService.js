@@ -50,6 +50,11 @@ function createMutualFundScoringService() {
         score += 5;
       }
 
+      const reasonText =
+        reasons.length > 0
+          ? reasons[0]
+          : "Balanced return and risk profile with stable long-term indicators.";
+
       return {
         SchemeName: fund.SchemeName,
         NAV: Number(fund.NAV || 0),
@@ -59,6 +64,7 @@ function createMutualFundScoringService() {
         ExpenseRatio: Number(fund.ExpenseRatio || 0),
         AUM: Number(fund.AUM || 0),
         RiskLevel: String(fund.RiskLevel || "Moderate"),
+        Reason: reasonText,
         WhyRecommended:
           reasons.length > 0
             ? reasons.join("; ")
