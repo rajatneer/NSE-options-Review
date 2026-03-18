@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mutual Fund Details</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-glow bg-glow-one"></div>
+    <div class="bg-glow bg-glow-two"></div>
+
+    <main class="dashboard">
+      <nav class="page-nav" aria-label="Primary">
+        <a class="page-nav-link" href="/">Options Trading</a>
+        <a class="page-nav-link" href="/stock-details.html">Stock Details</a>
+        <a class="page-nav-link active" href="/mutual-fund-details.html">Mutual Funds</a>
+      </nav>
+
+      <header class="hero">
+        <div>
+          <p class="tag">MUTUAL FUND INTELLIGENCE</p>
+          <h1>Mutual Fund Details</h1>
+          <p class="subtitle">
+            Select category and fetch Top 5 best-performing mutual funds with score and reasoning.
+          </p>
+        </div>
+        <div class="actions">
+          <button id="mfSearchBtn" class="run-btn">Search Funds</button>
+          <p id="mfLastUpdated" class="last-updated">Last update: Not available</p>
+        </div>
+      </header>
+
+      <section id="mfErrorBox" class="error-box hidden"></section>
+
+      <section class="stock-panel mf-controls-panel">
+        <div class="mf-controls-grid">
+          <label>
+            Mutual Fund Type
+            <select id="mfCategory"></select>
+          </label>
+          <label>
+            Sort By
+            <select id="mfSortBy">
+              <option value="score">Score</option>
+              <option value="returns1y">1Y Return</option>
+              <option value="returns3y">3Y Return</option>
+              <option value="returns5y">5Y Return</option>
+              <option value="expense">Expense Ratio</option>
+              <option value="risk">Risk</option>
+            </select>
+          </label>
+          <label>
+            Risk Filter
+            <select id="mfRiskFilter">
+              <option value="All">All</option>
+              <option value="Low">Low</option>
+              <option value="Moderate">Moderate</option>
+              <option value="High">High</option>
+            </select>
+          </label>
+          <label class="mf-check-wrap">
+            <input id="mfHighReturnOnly" type="checkbox" />
+            High Return Only
+          </label>
+        </div>
+
+        <p id="mfMessage" class="source-info">Loading categories...</p>
+      </section>
+
+      <section class="stock-panel">
+        <div class="stock-table-wrap">
+          <table class="stock-table" aria-label="Top mutual funds table">
+            <thead>
+              <tr>
+                <th>Scheme Name</th>
+                <th>NAV</th>
+                <th>1Y Return</th>
+                <th>3Y Return</th>
+                <th>5Y Return</th>
+                <th>Expense</th>
+                <th>AUM (Cr)</th>
+                <th>Risk</th>
+                <th>Why Best</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="mfTableBody">
+              <tr>
+                <td colspan="10">Run search to load mutual funds.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="stock-panel">
+        <h2 class="mf-sip-heading">SIP Calculator</h2>
+        <div class="mf-sip-grid">
+          <label>
+            Monthly SIP (INR)
+            <input id="sipAmount" type="number" min="0" step="100" value="5000" />
+          </label>
+          <label>
+            Annual Return (%)
+            <input id="sipRate" type="number" min="0" step="0.1" value="12" />
+          </label>
+          <label>
+            Years
+            <input id="sipYears" type="number" min="1" value="10" />
+          </label>
+          <button id="sipCalculateBtn" class="run-btn mf-sip-btn">Calculate SIP</button>
+        </div>
+        <p id="sipOutput" class="source-info">Enter values and click Calculate SIP.</p>
+      </section>
+    </main>
+
+    <script src="mutual-fund-details.js?v=1"></script>
+  </body>
+</html>

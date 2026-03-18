@@ -3,6 +3,11 @@ const express = require("express");
 const axios = require("axios");
 const { analyzeMarket } = require("./analysis");
 const { createMarketSentimentService } = require("./marketSentimentService");
+const { createHttpMarketClient } = require("./httpMarketClient");
+const { createStockAnalysisService } = require("./stockAnalysisService");
+const { createMutualFundDataService } = require("./mutualFundDataService");
+const { createMutualFundScoringService } = require("./mutualFundScoringService");
+const { createMutualFundAnalysisService } = require("./mutualFundAnalysisService");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -470,6 +475,17 @@ const marketSentimentService = createMarketSentimentService({
   fetchNseOptionChain
 });
 
+const httpMarketClient = createHttpMarketClient();
+const stockAnalysisService = createStockAnalysisService({
+  httpMarketClient
+});
+const mutualFundDataService = createMutualFundDataService();
+const mutualFundScoringService = createMutualFundScoringService();
+const mutualFundAnalysisService = createMutualFundAnalysisService({
+  mutualFundDataService,
+  mutualFundScoringService
+});
+
 function handleApiError(res, scope, error) {
   const message = error instanceof Error ? error.message : `Unexpected ${scope} error`;
   console.error(`[${scope.toUpperCase()}_ERROR]`, message, error);
@@ -610,6 +626,60 @@ app.get("/api/final-sentiment", async (req, res) => {
     res.json(payload);
   } catch (error) {
     handleApiError(res, "final-sentiment", error);
+  }
+});
+
+app.get("/api/stocks/top", async (req, res) => {
+  try {
+    const payload = await stockAnalysisService.getTopStocks(5);
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "stocks-top", error);
+  }
+});
+
+app.get("/api/mutualfunds/categories", (req, res) => {
+  try {
+    const categories = mutualFundDataService.getSupportedCategories();
+    res.json(categories);
+  } catch (error) {
+    handleApiError(res, "mutualfund-categories", error);
+  }
+});
+
+app.get("/api/mutualfunds/top", async (req, res) => {
+  try {
+    const category = String(req.query.category || "").trim();
+    if (!category) {
+      res.status(400).json({
+        error: "mutualfund-top failed",
+        details: "Category is required."
+      });
+      return;
+    }
+
+    const sortBy = String(req.query.sortBy || "score").trim();
+    const riskFilter = String(req.query.riskFilter || "All").trim();
+    const highReturnOnly = String(req.query.highReturnOnly || "false").trim().toLowerCase() === "true";
+
+    const payload = await mutualFundAnalysisService.getTopFunds({
+      category,
+      sortBy,
+      riskFilter,
+      highReturnOnly
+    });
+
+    res.json(payload);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      res.status(400).json({
+        error: "mutualfund-top failed",
+        details: error.message
+      });
+      return;
+    }
+
+    handleApiError(res, "mutualfund-top", error);
   }
 });
 
