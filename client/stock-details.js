@@ -1,4 +1,7 @@
 const refreshStocksBtn = document.getElementById("refreshStocksBtn");
+const refreshStocksBtnDefaultText = refreshStocksBtn
+  ? refreshStocksBtn.textContent.trim()
+  : "Refresh Stock Data";
 const stockLastUpdatedEl = document.getElementById("stockLastUpdated");
 const stockErrorBoxEl = document.getElementById("stockErrorBox");
 const stockMessageEl = document.getElementById("stockMessage");
@@ -6,6 +9,58 @@ const stockTableBodyEl = document.getElementById("stockTableBody");
 
 const STOCK_CACHE_KEY = "stockDetailsDailyCacheV2";
 const DAILY_REFRESH_MS = 24 * 60 * 60 * 1000;
+
+function setButtonLoading(button, isLoading, loadingText, defaultText) {
+  if (!button) {
+    return;
+  }
+
+  if (isLoading) {
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingText;
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.removeAttribute("aria-busy");
+  button.textContent = defaultText;
+}
+
+function ensurePageProgress() {
+  const existing = document.getElementById("pageProgressOverlay");
+  if (existing) {
+    return existing;
+  }
+
+  const wrapper = document.createElement("section");
+  wrapper.id = "pageProgressOverlay";
+  wrapper.className = "page-progress hidden";
+  wrapper.setAttribute("aria-live", "polite");
+  wrapper.setAttribute("aria-busy", "false");
+  wrapper.innerHTML =
+    '<div class="page-progress-panel"><p class="page-progress-text">Loading data...</p><div class="page-progress-track"><div class="page-progress-bar"></div></div></div>';
+  document.body.appendChild(wrapper);
+  return wrapper;
+}
+
+const pageProgressEl = ensurePageProgress();
+
+function setPageProgress(isVisible, message = "Loading data...") {
+  if (!pageProgressEl) {
+    return;
+  }
+
+  const textEl = pageProgressEl.querySelector(".page-progress-text");
+  if (textEl) {
+    textEl.textContent = message;
+  }
+
+  pageProgressEl.classList.toggle("hidden", !isVisible);
+  pageProgressEl.setAttribute("aria-busy", isVisible ? "true" : "false");
+}
 
 function formatNumber(value, digits = 2) {
   try {
@@ -146,7 +201,11 @@ function applyStockPayload(data, cacheLabel = "") {
 
 async function loadTopStocks(options = {}) {
   const forceRefresh = Boolean(options.forceRefresh);
-  refreshStocksBtn.disabled = true;
+  const showPageProgress = forceRefresh;
+  if (showPageProgress) {
+    setPageProgress(true, "Searching stock details...");
+  }
+  setButtonLoading(refreshStocksBtn, true, "Refreshing...", refreshStocksBtnDefaultText);
   hideStockError();
 
   try {
@@ -176,7 +235,10 @@ async function loadTopStocks(options = {}) {
     stockLastUpdatedEl.textContent = `Last update: ${new Date().toLocaleString("en-IN")}`;
     renderStockRows([]);
   } finally {
-    refreshStocksBtn.disabled = false;
+    if (showPageProgress) {
+      setPageProgress(false);
+    }
+    setButtonLoading(refreshStocksBtn, false, "Refreshing...", refreshStocksBtnDefaultText);
   }
 }
 

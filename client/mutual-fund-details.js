@@ -3,6 +3,7 @@ const mfSortByEl = document.getElementById("mfSortBy");
 const mfRiskFilterEl = document.getElementById("mfRiskFilter");
 const mfHighReturnOnlyEl = document.getElementById("mfHighReturnOnly");
 const mfSearchBtn = document.getElementById("mfSearchBtn");
+const mfSearchBtnDefaultText = mfSearchBtn ? mfSearchBtn.textContent.trim() : "Search Funds";
 const mfLastUpdatedEl = document.getElementById("mfLastUpdated");
 const mfErrorBoxEl = document.getElementById("mfErrorBox");
 const mfMessageEl = document.getElementById("mfMessage");
@@ -16,6 +17,58 @@ const sipOutputEl = document.getElementById("sipOutput");
 
 const MF_CACHE_KEY = "mutualFundsCacheV1";
 const MF_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function setButtonLoading(button, isLoading, loadingText, defaultText) {
+  if (!button) {
+    return;
+  }
+
+  if (isLoading) {
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingText;
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.removeAttribute("aria-busy");
+  button.textContent = defaultText;
+}
+
+function ensurePageProgress() {
+  const existing = document.getElementById("pageProgressOverlay");
+  if (existing) {
+    return existing;
+  }
+
+  const wrapper = document.createElement("section");
+  wrapper.id = "pageProgressOverlay";
+  wrapper.className = "page-progress hidden";
+  wrapper.setAttribute("aria-live", "polite");
+  wrapper.setAttribute("aria-busy", "false");
+  wrapper.innerHTML =
+    '<div class="page-progress-panel"><p class="page-progress-text">Loading data...</p><div class="page-progress-track"><div class="page-progress-bar"></div></div></div>';
+  document.body.appendChild(wrapper);
+  return wrapper;
+}
+
+const pageProgressEl = ensurePageProgress();
+
+function setPageProgress(isVisible, message = "Loading data...") {
+  if (!pageProgressEl) {
+    return;
+  }
+
+  const textEl = pageProgressEl.querySelector(".page-progress-text");
+  if (textEl) {
+    textEl.textContent = message;
+  }
+
+  pageProgressEl.classList.toggle("hidden", !isVisible);
+  pageProgressEl.setAttribute("aria-busy", isVisible ? "true" : "false");
+}
 
 function formatNumber(value, digits = 2) {
   try {
@@ -180,6 +233,7 @@ async function loadCategories() {
 
 async function loadFunds(options = {}) {
   const forceRefresh = Boolean(options.forceRefresh);
+  const showPageProgress = forceRefresh;
   const category = String(mfCategoryEl.value || "").trim();
   if (!category) {
     showMfError("Please select a mutual fund category.");
@@ -187,7 +241,10 @@ async function loadFunds(options = {}) {
   }
 
   hideMfError();
-  mfSearchBtn.disabled = true;
+  setButtonLoading(mfSearchBtn, true, "Searching...", mfSearchBtnDefaultText);
+  if (showPageProgress) {
+    setPageProgress(true, "Searching mutual funds...");
+  }
 
   const query = new URLSearchParams({
     category,
@@ -226,7 +283,10 @@ async function loadFunds(options = {}) {
     mfMessageEl.textContent = "No data available.";
     mfTableBodyEl.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
   } finally {
-    mfSearchBtn.disabled = false;
+    if (showPageProgress) {
+      setPageProgress(false);
+    }
+    setButtonLoading(mfSearchBtn, false, "Searching...", mfSearchBtnDefaultText);
   }
 }
 

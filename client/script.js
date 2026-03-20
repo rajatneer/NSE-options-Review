@@ -1,4 +1,5 @@
 const runBtn = document.getElementById("runBtn");
+const runBtnDefaultText = runBtn ? runBtn.textContent.trim() : "Run Market Analysis";
 const spinner = document.getElementById("spinner");
 const errorBox = document.getElementById("errorBox");
 const lastUpdated = document.getElementById("lastUpdated");
@@ -58,6 +59,58 @@ const sentimentGaugeCtx = document.getElementById("sentimentGauge").getContext("
 let callPutChart;
 let strikeChart;
 let sentimentGaugeChart;
+
+function setButtonLoading(button, isLoading, loadingText, defaultText) {
+  if (!button) {
+    return;
+  }
+
+  if (isLoading) {
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingText;
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.removeAttribute("aria-busy");
+  button.textContent = defaultText;
+}
+
+function ensurePageProgress() {
+  const existing = document.getElementById("pageProgressOverlay");
+  if (existing) {
+    return existing;
+  }
+
+  const wrapper = document.createElement("section");
+  wrapper.id = "pageProgressOverlay";
+  wrapper.className = "page-progress hidden";
+  wrapper.setAttribute("aria-live", "polite");
+  wrapper.setAttribute("aria-busy", "false");
+  wrapper.innerHTML =
+    '<div class="page-progress-panel"><p class="page-progress-text">Loading data...</p><div class="page-progress-track"><div class="page-progress-bar"></div></div></div>';
+  document.body.appendChild(wrapper);
+  return wrapper;
+}
+
+const pageProgressEl = ensurePageProgress();
+
+function setPageProgress(isVisible, message = "Loading data...") {
+  if (!pageProgressEl) {
+    return;
+  }
+
+  const textEl = pageProgressEl.querySelector(".page-progress-text");
+  if (textEl) {
+    textEl.textContent = message;
+  }
+
+  pageProgressEl.classList.toggle("hidden", !isVisible);
+  pageProgressEl.setAttribute("aria-busy", isVisible ? "true" : "false");
+}
 
 function formatNumber(value) {
   try {
@@ -331,7 +384,8 @@ function hideError() {
 }
 
 async function runAnalysis() {
-  runBtn.disabled = true;
+  setPageProgress(true, "Running market analysis...");
+  setButtonLoading(runBtn, true, "Analyzing...", runBtnDefaultText);
   spinner.classList.remove("hidden");
   hideError();
 
@@ -415,7 +469,8 @@ async function runAnalysis() {
     const message = error instanceof Error ? error.message : "Unexpected analysis error";
     showError(`Unable to run market analysis. ${message}`);
   } finally {
-    runBtn.disabled = false;
+    setPageProgress(false);
+    setButtonLoading(runBtn, false, "Analyzing...", runBtnDefaultText);
     spinner.classList.add("hidden");
   }
 }
