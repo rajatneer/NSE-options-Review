@@ -2,6 +2,7 @@ const axios = require("axios");
 
 const INVESTING_MAJOR_INDICES_URL = "https://www.investing.com/indices/major-indices";
 const TRADINGVIEW_SCANNER_URL = "https://scanner.tradingview.com/india/scan";
+const YAHOO_CHART_BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const NSE_BASE_URL = "https://www.nseindia.com";
 const FII_DII_API_PATH = "/api/fiidiiTradeReact";
 const STOOQ_BASE_URL = "https://stooq.com";
@@ -21,6 +22,137 @@ const SIGNAL_SCORES = {
 function toFiniteNumber(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function calculateEma(values, period) {
+  try {
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new TypeError("EMA values are required");
+    }
+
+    const p = Number(period);
+    if (!Number.isFinite(p) || p <= 0) {
+      throw new RangeError("EMA period must be positive");
+    }
+
+    const alpha = 2 / (p + 1);
+    let ema = toFiniteNumber(values[0]);
+    for (let i = 1; i < values.length; i += 1) {
+      const current = toFiniteNumber(values[i], ema);
+      ema = alpha * current + (1 - alpha) * ema;
+    }
+
+    return ema;
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof RangeError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      throw new Error(`EMA computation failed: ${error.message}`);
+    }
+
+    throw new Error("EMA computation failed with unknown error");
+  }
+}
+
+function calculateRsi(values, period = 14) {
+  try {
+    if (!Array.isArray(values) || values.length <= period) {
+      throw new RangeError("RSI requires more candles");
+    }
+
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = 1; i <= period; i += 1) {
+      const delta = toFiniteNumber(values[i]) - toFiniteNumber(values[i - 1]);
+      if (delta >= 0) {
+        gains += delta;
+      } else {
+        losses += Math.abs(delta);
+      }
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+
+    for (let i = period + 1; i < values.length; i += 1) {
+      const delta = toFiniteNumber(values[i]) - toFiniteNumber(values[i - 1]);
+      const gain = delta > 0 ? delta : 0;
+      const loss = delta < 0 ? Math.abs(delta) : 0;
+
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+
+    if (avgLoss === 0) {
+      return 100;
+    }
+
+    const rs = avgGain / avgLoss;
+    return Number((100 - 100 / (1 + rs)).toFixed(2));
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      throw new Error(`RSI computation failed: ${error.message}`);
+    }
+
+    throw new Error("RSI computation failed with unknown error");
+  }
+}
+
+async function fetchYahooCloseSeries(symbol, range = "5d", interval = "5m") {
+  try {
+    const response = await axios.get(`${YAHOO_CHART_BASE_URL}/${encodeURIComponent(symbol)}`, {
+      timeout: 12000,
+      params: {
+        interval,
+        range
+      },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        Accept: "application/json"
+      },
+      validateStatus: (status) => status >= 200 && status < 500
+    });
+
+    if (response.status !== 200 || !response.data) {
+      throw new RangeError(`Yahoo chart invalid status (${response.status})`);
+    }
+
+    const result = response.data?.chart?.result?.[0];
+    const quote = result?.indicators?.quote?.[0];
+    const close = Array.isArray(quote?.close) ? quote.close : [];
+    const values = close
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && item > 0)
+      .map((item) => Number(item));
+
+    if (values.length < 21) {
+      throw new RangeError("Yahoo chart returned insufficient candles for EMA 21");
+    }
+
+    return values;
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw error;
+    }
+
+    if (axios.isAxiosError(error)) {
+      throw new Error(`Yahoo chart request failed (${error.response?.status || "NoStatus"})`);
+    }
+
+    if (error instanceof Error) {
+      throw new Error(`Yahoo chart close-series fetch failed: ${error.message}`);
+    }
+
+    throw new Error("Yahoo chart close-series fetch failed with unknown error");
+  }
 }
 
 function normalizeSignal(signal) {
@@ -788,6 +920,63 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
     }
   }
 
+  async function getRsiEmaSignal() {
+    try {
+      const closes = await fetchYahooCloseSeries("^NSEI", "5d", "5m");
+
+      const ema9 = Number(calculateEma(closes, 9).toFixed(2));
+      const ema21 = Number(calculateEma(closes, 21).toFixed(2));
+      const rsi14 = Number(calculateRsi(closes, 14).toFixed(2));
+
+      let signal = "NEUTRAL";
+      let setup = "No-trade / Wait";
+      let reason = "EMA trend and RSI momentum are not aligned.";
+
+      if (ema9 > ema21 && rsi14 >= 55) {
+        signal = "BULLISH";
+        setup = "Bullish setup";
+        reason = "EMA 9 is above EMA 21 and RSI(14) confirms momentum (>=55).";
+      } else if (ema9 < ema21 && rsi14 <= 45) {
+        signal = "BEARISH";
+        setup = "Bearish setup";
+        reason = "EMA 9 is below EMA 21 and RSI(14) confirms weakness (<=45).";
+      }
+
+      return {
+        signal,
+        score: signalToScore(signal),
+        setup,
+        reason,
+        ema9,
+        ema21,
+        rsi14,
+        candleCount: closes.length,
+        source: "YAHOO_CHART",
+        symbol: "NIFTY",
+        interval: "5m",
+        range: "5d",
+        fetchedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        signal: "NEUTRAL",
+        score: 0,
+        setup: "No-trade / Wait",
+        reason: "RSI + EMA signal is unavailable.",
+        ema9: 0,
+        ema21: 0,
+        rsi14: 0,
+        candleCount: 0,
+        source: "YAHOO_CHART_UNAVAILABLE",
+        symbol: "NIFTY",
+        interval: "5m",
+        range: "5d",
+        fetchedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "RSI + EMA signal fetch failed"
+      };
+    }
+  }
+
   async function getNewsSentiment() {
     try {
       const headers = {
@@ -855,13 +1044,14 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
 
   async function getFinalSentiment() {
     try {
-      const [globalSentiment, giftNifty, optionChain, fiiDii, technicalIndicators, newsSentiment] =
+      const [globalSentiment, giftNifty, optionChain, fiiDii, technicalIndicators, rsiEmaSignal, newsSentiment] =
         await Promise.all([
           getGlobalSentiment(),
           getGiftNiftySentiment(),
           getOptionChainSentiment(),
           getFiiDiiSentiment(),
           getTechnicalIndicatorsSentiment(),
+          getRsiEmaSignal(),
           getNewsSentiment()
         ]);
 
@@ -872,6 +1062,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
         pcr: optionChain.pcrSignal,
         fiiDii: fiiDii.signal,
         technicalIndicators: technicalIndicators.signal,
+        rsiEmaSignal: rsiEmaSignal.signal,
         newsSentiment: newsSentiment.signal
       };
 
@@ -882,6 +1073,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
         signalToScore(signals.pcr) +
         signalToScore(signals.fiiDii) +
         signalToScore(signals.technicalIndicators) +
+        signalToScore(signals.rsiEmaSignal) +
         signalToScore(signals.newsSentiment);
 
       let marketSentiment = "NEUTRAL";
@@ -895,8 +1087,8 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
         marketSentiment,
         totalScore,
         scoreRange: {
-          min: -7,
-          max: 7
+          min: -8,
+          max: 8
         },
         colorIndicator: getSentimentColor(marketSentiment),
         signals,
@@ -911,6 +1103,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
           },
           fiiDii,
           technicalIndicators,
+          rsiEmaSignal,
           newsSentiment
         },
         generatedAt: new Date().toISOString()
@@ -920,8 +1113,8 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
         marketSentiment: "NEUTRAL",
         totalScore: 0,
         scoreRange: {
-          min: -7,
-          max: 7
+          min: -8,
+          max: 8
         },
         colorIndicator: "YELLOW",
         signals: {
@@ -931,6 +1124,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
           pcr: "NEUTRAL",
           fiiDii: "NEUTRAL",
           technicalIndicators: "NEUTRAL",
+          rsiEmaSignal: "NEUTRAL",
           newsSentiment: "NEUTRAL"
         },
         details: {
@@ -961,6 +1155,12 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
             signal: "NEUTRAL",
             score: 0
           },
+          rsiEmaSignal: {
+            signal: "NEUTRAL",
+            score: 0,
+            setup: "No-trade / Wait",
+            reason: "RSI + EMA signal unavailable"
+          },
           newsSentiment: {
             signal: "NEUTRAL",
             score: 0
@@ -978,6 +1178,7 @@ function createMarketSentimentService({ fetchNseOptionChain }) {
     getOptionChainSentiment,
     getFiiDiiSentiment,
     getTechnicalIndicatorsSentiment,
+    getRsiEmaSignal,
     getNewsSentiment,
     getFinalSentiment
   };

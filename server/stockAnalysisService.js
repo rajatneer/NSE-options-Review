@@ -297,8 +297,15 @@ function buildStockRecord(symbolConfig, points) {
     confidence += Math.round(momentum * 18);
     confidence = Math.max(0, Math.min(100, confidence));
 
+    const macdGapPercent =
+      currentPrice > 0 ? Number((((macd.macdLine - macd.signalLine) / currentPrice) * 100).toFixed(3)) : 0;
+    const volumeRatio3Day = thirdVolume > 0 ? Number((latestVolume / thirdVolume).toFixed(2)) : 0;
+    const distanceFromEma20Percent =
+      ema20 > 0 ? Number((((currentPrice - ema20) / ema20) * 100).toFixed(2)) : 0;
+
     return {
       StockName: symbolConfig.stockName,
+      Symbol: symbolConfig.symbol,
       CurrentPrice: currentPrice,
       TargetPrice: targetPrice,
       ExpectedDays: expectedDays,
@@ -309,7 +316,19 @@ function buildStockRecord(symbolConfig, points) {
       UpsidePercent: upsidePercent,
       ConfidenceScore: confidence,
       BullishSignScore: bullishSignScore,
-      IsBullishCandidate: validRsiRange && macdBullish && increasingVolume && aboveEma20
+      IsBullishCandidate: validRsiRange && macdBullish && increasingVolume && aboveEma20,
+      Measures: {
+        Ema20: Number(ema20.toFixed(2)),
+        DistanceFromEma20Percent: distanceFromEma20Percent,
+        Rsi: Number(rsi.toFixed(2)),
+        MacdLine: Number(macd.macdLine.toFixed(4)),
+        SignalLine: Number(macd.signalLine.toFixed(4)),
+        MacdGapPercent: macdGapPercent,
+        LatestVolume: Math.round(latestVolume),
+        VolumeRatio3Day: volumeRatio3Day,
+        Volatility20: Number(volatility.toFixed(4)),
+        MomentumScore: Number(momentum.toFixed(3))
+      }
     };
   } catch (error) {
     if (error instanceof TypeError || error instanceof RangeError) {
@@ -418,6 +437,21 @@ function createStockAnalysisService({ httpMarketClient, symbols }) {
         { symbol: "SUNPHARMA.NS", stockName: "Sun Pharma" },
         { symbol: "ITC.NS", stockName: "ITC" }
       ];
+
+  const smallCapSymbols = [
+    { symbol: "IEX.NS", stockName: "Indian Energy Exchange" },
+    { symbol: "CDSL.NS", stockName: "Central Depository Services" },
+    { symbol: "BSE.NS", stockName: "BSE" },
+    { symbol: "CAMS.NS", stockName: "Computer Age Management Services" },
+    { symbol: "HUDCO.NS", stockName: "HUDCO" },
+    { symbol: "IRCON.NS", stockName: "IRCON International" },
+    { symbol: "NBCC.NS", stockName: "NBCC India" },
+    { symbol: "CESC.NS", stockName: "CESC" },
+    { symbol: "FINPIPE.NS", stockName: "Finolex Industries" },
+    { symbol: "CYIENT.NS", stockName: "Cyient" },
+    { symbol: "SONATSOFTW.NS", stockName: "Sonata Software" },
+    { symbol: "RAIN.NS", stockName: "Rain Industries" }
+  ];
 
   async function analyzeSingleStock(symbolConfig) {
     try {
@@ -547,8 +581,138 @@ function createStockAnalysisService({ httpMarketClient, symbols }) {
     }
   }
 
+  function buildSmallCapReasonAndScore(stock) {
+    const reasons = [];
+    let score = 0;
+
+    if (stock.Trend === "Bullish") {
+      reasons.push("Price is trading above EMA-20 trend support.");
+      score += 18;
+    }
+
+    if (stock.MACD === "Bullish Crossover") {
+      reasons.push("MACD has a fresh bullish crossover.");
+      score += 22;
+    } else if (stock.MACD === "Above Signal") {
+      reasons.push("MACD line is holding above signal line.");
+      score += 14;
+    }
+
+    if (stock.RSI >= 55 && stock.RSI <= 72) {
+      reasons.push(`RSI ${stock.RSI} indicates healthy momentum without extreme overbought pressure.`);
+      score += 20;
+    } else if (stock.RSI > 50) {
+      reasons.push(`RSI ${stock.RSI} is on bullish side.`);
+      score += 10;
+    }
+
+    const volumeRatio = Number(stock?.Measures?.VolumeRatio3Day || 0);
+    if (volumeRatio >= 1.25) {
+      reasons.push(`Volume expansion is strong (${volumeRatio}x vs 3 sessions ago).`);
+      score += 22;
+    } else if (volumeRatio >= 1.05) {
+      reasons.push(`Volume is improving (${volumeRatio}x vs 3 sessions ago).`);
+      score += 12;
+    }
+
+    const emaDistance = Number(stock?.Measures?.DistanceFromEma20Percent || 0);
+    if (emaDistance >= 1.2 && emaDistance <= 6.5) {
+      reasons.push(`Price is ${emaDistance}% above EMA-20, confirming momentum continuation zone.`);
+      score += 18;
+    } else if (emaDistance > 0) {
+      score += 8;
+    }
+
+    const volatility20 = Number(stock?.Measures?.Volatility20 || 0);
+    const volatilityBoost = clamp(volatility20 / 0.03, 0, 1);
+    score += Math.round(volatilityBoost * 14);
+
+    const movementPotentialPercent = Number((1.1 + score * 0.045).toFixed(2));
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      movementPotentialPercent,
+      why: reasons.join(" ") || "Momentum setup is mixed; monitor before entry."
+    };
+  }
+
+  async function getSmallCapHighMovement(limit = 5) {
+    try {
+      const normalizedLimit = Number.isFinite(Number(limit)) ? Number(limit) : 5;
+      const finalLimit = Math.max(1, Math.min(10, Math.trunc(normalizedLimit)));
+
+      const settled = await Promise.allSettled(smallCapSymbols.map((item) => analyzeSingleStock(item)));
+      const failedSymbols = [];
+      const candidates = [];
+
+      settled.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const stock = result.value;
+          const movement = buildSmallCapReasonAndScore(stock);
+          candidates.push({
+            ...stock,
+            HighMovementScore: movement.score,
+            TodayMovementPotentialPercent: movement.movementPotentialPercent,
+            Why: movement.why
+          });
+          return;
+        }
+
+        failedSymbols.push({
+          symbol: smallCapSymbols[index]?.symbol || "UNKNOWN",
+          error: result.reason instanceof Error ? result.reason.message : "Unknown stock error"
+        });
+      });
+
+      const ranked = candidates
+        .filter((item) => (item.HighMovementScore || 0) >= 45)
+        .sort((a, b) => {
+          if ((b.HighMovementScore || 0) !== (a.HighMovementScore || 0)) {
+            return (b.HighMovementScore || 0) - (a.HighMovementScore || 0);
+          }
+
+          if ((b.TodayMovementPotentialPercent || 0) !== (a.TodayMovementPotentialPercent || 0)) {
+            return (b.TodayMovementPotentialPercent || 0) - (a.TodayMovementPotentialPercent || 0);
+          }
+
+          return (b.ConfidenceScore || 0) - (a.ConfidenceScore || 0);
+        })
+        .slice(0, finalLimit)
+        .map((item) => ({
+          StockName: item.StockName,
+          Symbol: item.Symbol,
+          CurrentPrice: item.CurrentPrice,
+          TodayMovementPotentialPercent: item.TodayMovementPotentialPercent,
+          HighMovementScore: item.HighMovementScore,
+          Trend: item.Trend,
+          Why: item.Why,
+          Measures: item.Measures
+        }));
+
+      return {
+        success: true,
+        source: "YAHOO_FINANCE",
+        message: "Small-cap high movement suggestions generated from momentum and participation signals.",
+        generatedAt: new Date().toISOString(),
+        stocks: ranked,
+        failedSymbols
+      };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        throw error;
+      }
+
+      if (error instanceof Error) {
+        throw new Error(`Small-cap movement analysis failed: ${error.message}`);
+      }
+
+      throw new Error("Small-cap movement analysis failed with unknown error");
+    }
+  }
+
   return {
-    getTopStocks
+    getTopStocks,
+    getSmallCapHighMovement
   };
 }
 

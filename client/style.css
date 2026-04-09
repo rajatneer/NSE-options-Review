@@ -97,6 +97,45 @@ body {
   backdrop-filter: blur(8px);
 }
 
+.smallcap-panel {
+  margin-top: 14px;
+}
+
+.smallcap-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  flex-wrap: wrap;
+}
+
+.smallcap-head h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  color: #dbe9f6;
+}
+
+.smallcap-table {
+  min-width: 1180px;
+}
+
+.smallcap-highlight {
+  color: var(--bull);
+  font-weight: 700;
+}
+
+.smallcap-why {
+  min-width: 320px;
+  color: #d8e7f5;
+  line-height: 1.35;
+}
+
+.smallcap-measures {
+  min-width: 320px;
+  color: #cae4fa;
+  font-size: 0.84rem;
+}
+
 .stock-table-wrap {
   margin-top: 10px;
   overflow-x: auto;

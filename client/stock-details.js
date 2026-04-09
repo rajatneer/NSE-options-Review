@@ -6,6 +6,8 @@ const stockLastUpdatedEl = document.getElementById("stockLastUpdated");
 const stockErrorBoxEl = document.getElementById("stockErrorBox");
 const stockMessageEl = document.getElementById("stockMessage");
 const stockTableBodyEl = document.getElementById("stockTableBody");
+const smallCapMessageEl = document.getElementById("smallCapMessage");
+const smallCapTableBodyEl = document.getElementById("smallCapTableBody");
 
 const STOCK_CACHE_KEY = "stockDetailsDailyCacheV2";
 const DAILY_REFRESH_MS = 24 * 60 * 60 * 1000;
@@ -189,6 +191,75 @@ function renderStockRows(stocks) {
   }
 }
 
+function buildMeasuresText(measures) {
+  if (!measures || typeof measures !== "object") {
+    return "--";
+  }
+
+  const parts = [];
+
+  if (Number.isFinite(Number(measures.Rsi))) {
+    parts.push(`RSI ${formatNumber(measures.Rsi)}`);
+  }
+
+  if (Number.isFinite(Number(measures.DistanceFromEma20Percent))) {
+    parts.push(`EMA20 Dist ${formatNumber(measures.DistanceFromEma20Percent)}%`);
+  }
+
+  if (Number.isFinite(Number(measures.MacdGapPercent))) {
+    parts.push(`MACD Gap ${formatNumber(measures.MacdGapPercent, 3)}%`);
+  }
+
+  if (Number.isFinite(Number(measures.VolumeRatio3Day))) {
+    parts.push(`Vol Ratio ${formatNumber(measures.VolumeRatio3Day)}x`);
+  }
+
+  if (Number.isFinite(Number(measures.Volatility20))) {
+    parts.push(`Volatility20 ${formatNumber(measures.Volatility20, 4)}`);
+  }
+
+  return parts.join(" | ") || "--";
+}
+
+function renderSmallCapRows(stocks) {
+  try {
+    const rows = Array.isArray(stocks) ? stocks : [];
+    if (!smallCapTableBodyEl) {
+      return;
+    }
+
+    if (rows.length === 0) {
+      smallCapTableBodyEl.innerHTML =
+        '<tr><td colspan="7">No high-movement small-cap setup found for today.</td></tr>';
+      return;
+    }
+
+    smallCapTableBodyEl.innerHTML = rows
+      .map((stock) => {
+        const trend = stock.Trend === "Bullish" ? "Bullish" : "Bearish";
+        const trendClass = trend === "Bullish" ? "stock-trend-bull" : "stock-trend-bear";
+
+        return `
+          <tr>
+            <td>${escapeHtml(stock.StockName || "--")}</td>
+            <td>${formatNumber(stock.CurrentPrice)}</td>
+            <td class="smallcap-highlight">${formatNumber(stock.TodayMovementPotentialPercent)}%</td>
+            <td>${formatInteger(stock.HighMovementScore)}</td>
+            <td class="${trendClass}">${escapeHtml(trend)}</td>
+            <td class="smallcap-why">${escapeHtml(stock.Why || "--")}</td>
+            <td class="smallcap-measures">${escapeHtml(buildMeasuresText(stock.Measures))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    if (smallCapTableBodyEl) {
+      smallCapTableBodyEl.innerHTML =
+        '<tr><td colspan="7">Unable to render small-cap high movement details.</td></tr>';
+    }
+  }
+}
+
 function applyStockPayload(data, cacheLabel = "") {
   renderStockRows(data.stocks || []);
 
@@ -197,6 +268,24 @@ function applyStockPayload(data, cacheLabel = "") {
 
   const refreshedAt = data.generatedAt ? new Date(data.generatedAt) : new Date();
   stockLastUpdatedEl.textContent = `Last update: ${refreshedAt.toLocaleString("en-IN")}`;
+}
+
+async function loadSmallCapHighMovement() {
+  const response = await fetch("/api/stocks/smallcap-high-movement", {
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const details = payload.details || payload.error || `Request failed with status ${response.status}`;
+    throw new Error(details);
+  }
+
+  const data = await response.json();
+  renderSmallCapRows(data.stocks || []);
+  if (smallCapMessageEl) {
+    smallCapMessageEl.textContent = data.message || "Small-cap movement details updated.";
+  }
 }
 
 async function loadTopStocks(options = {}) {
@@ -212,21 +301,26 @@ async function loadTopStocks(options = {}) {
     const cachedData = forceRefresh ? null : readDailyCache();
     if (cachedData) {
       applyStockPayload(cachedData, "Loaded from today's cache");
+      await loadSmallCapHighMovement();
       return;
     }
 
-    const response = await fetch("/api/stocks/top", {
-      method: "GET"
-    });
+    const [topStocksResponse] = await Promise.all([
+      fetch("/api/stocks/top", {
+        method: "GET"
+      })
+    ]);
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      const details = payload.details || payload.error || `Request failed with status ${response.status}`;
+    if (!topStocksResponse.ok) {
+      const payload = await topStocksResponse.json().catch(() => ({}));
+      const details =
+        payload.details || payload.error || `Request failed with status ${topStocksResponse.status}`;
       throw new Error(details);
     }
 
-    const data = await response.json();
+    const data = await topStocksResponse.json();
     applyStockPayload(data);
+    await loadSmallCapHighMovement();
     writeDailyCache(data);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown stock data error";
@@ -234,6 +328,10 @@ async function loadTopStocks(options = {}) {
     stockMessageEl.textContent = "Showing fallback message due to data source issue.";
     stockLastUpdatedEl.textContent = `Last update: ${new Date().toLocaleString("en-IN")}`;
     renderStockRows([]);
+    renderSmallCapRows([]);
+    if (smallCapMessageEl) {
+      smallCapMessageEl.textContent = "Unable to load small-cap high movement suggestions.";
+    }
   } finally {
     if (showPageProgress) {
       setPageProgress(false);

@@ -389,6 +389,9 @@ function buildTradeSetup({
     const technicalSignal = normalizeSentimentEngine(
       sentimentEngineDetails?.technicalIndicators?.signal
     );
+    const rsiEmaSignal = normalizeSentimentEngine(
+      sentimentEngineDetails?.rsiEmaSignal?.signal
+    );
     const newsSignal = normalizeSentimentEngine(sentimentEngineDetails?.newsSentiment?.signal);
     const giftNiftySignal = normalizeSentimentEngine(sentimentEngineDetails?.giftNifty?.signal);
 
@@ -424,6 +427,7 @@ function buildTradeSetup({
       { name: "supportResistance", signal: supportResistanceSignal, weight: 1 },
       { name: "fiiDii", signal: fiiDiiSignal, weight: 1 },
       { name: "technical", signal: technicalSignal, weight: 1 },
+      { name: "rsiEma", signal: rsiEmaSignal, weight: 1 },
       { name: "news", signal: newsSignal, weight: 1 },
       { name: "giftNifty", signal: giftNiftySignal, weight: 0.5 }
     ];
@@ -588,6 +592,9 @@ function buildTradeSetup({
     const technicalDetail =
       `Technicals ${technicalSignal} with RSI ${toNumber(sentimentEngineDetails?.technicalIndicators?.rsi).toFixed(2)} and MA50 ${toNumber(sentimentEngineDetails?.technicalIndicators?.ma50).toFixed(2)}.`;
 
+    const rsiEmaDetail =
+      `RSI+EMA ${rsiEmaSignal}, EMA9 ${toNumber(sentimentEngineDetails?.rsiEmaSignal?.ema9).toFixed(2)}, EMA21 ${toNumber(sentimentEngineDetails?.rsiEmaSignal?.ema21).toFixed(2)}, RSI14 ${toNumber(sentimentEngineDetails?.rsiEmaSignal?.rsi14).toFixed(2)}.`;
+
     const newsDetail =
       `News score ${toNumber(sentimentEngineDetails?.newsSentiment?.newsScore)}, bullish hits ${toNumber(sentimentEngineDetails?.newsSentiment?.bullishHits)}, bearish hits ${toNumber(sentimentEngineDetails?.newsSentiment?.bearishHits)}.`;
 
@@ -672,6 +679,10 @@ function buildTradeSetup({
         technicalIndicators: {
           signal: technicalSignal,
           detail: technicalDetail
+        },
+        rsiEmaSignal: {
+          signal: rsiEmaSignal,
+          detail: rsiEmaDetail
         },
         newsSentiment: {
           signal: newsSignal,

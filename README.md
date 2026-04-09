@@ -27,12 +27,14 @@ A full-stack Node.js + Express + HTML/CSS/JS dashboard that fetches NSE option c
   - PCR calculation
   - Strong support/resistance (highest Put OI / Call OI)
   - Call vs Put OI buildup (positive change in OI)
+  - Live RSI + EMA(9/21) signal using NIFTY candles
   - Market prediction rules
 - Frontend dashboard includes:
   - Run button
   - Loading spinner
   - Last update timestamp
   - Color-coded prediction
+  - RSI + EMA(9/21) signal card in sentiment and trade factors panels
   - Chart.js visualizations
 
 ## Analysis Rules

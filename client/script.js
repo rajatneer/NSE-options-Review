@@ -32,6 +32,7 @@ const tradeOptionChainEl = document.getElementById("tradeOptionChain");
 const tradePcrEl = document.getElementById("tradePcr");
 const tradeFiiDiiEl = document.getElementById("tradeFiiDii");
 const tradeTechnicalEl = document.getElementById("tradeTechnical");
+const tradeRsiEmaEl = document.getElementById("tradeRsiEma");
 const tradeNewsEl = document.getElementById("tradeNews");
 const tradeGiftNiftyEl = document.getElementById("tradeGiftNifty");
 const tradeRationaleEl = document.getElementById("tradeRationale");
@@ -47,6 +48,7 @@ const supportLevelResultEl = document.getElementById("supportLevelResult");
 const resistanceLevelResultEl = document.getElementById("resistanceLevelResult");
 const fiiActivityResultEl = document.getElementById("fiiActivityResult");
 const technicalResultEl = document.getElementById("technicalResult");
+const rsiEmaResultEl = document.getElementById("rsiEmaResult");
 const newsSentimentResultEl = document.getElementById("newsSentimentResult");
 const newsHeadlinesEl = document.getElementById("newsHeadlines");
 
@@ -447,6 +449,7 @@ async function runAnalysis() {
     tradePcrEl.textContent = `${tradeFactors.pcr?.signal || "NEUTRAL"} | ${tradeFactors.pcr?.detail || "Not available"}`;
     tradeFiiDiiEl.textContent = `${tradeFactors.fiiDii?.signal || "NEUTRAL"} | ${tradeFactors.fiiDii?.detail || "Not available"}`;
     tradeTechnicalEl.textContent = `${tradeFactors.technicalIndicators?.signal || "NEUTRAL"} | ${tradeFactors.technicalIndicators?.detail || "Not available"}`;
+    tradeRsiEmaEl.textContent = `${tradeFactors.rsiEmaSignal?.signal || "NEUTRAL"} | ${tradeFactors.rsiEmaSignal?.detail || "Not available"}`;
     tradeNewsEl.textContent = `${tradeFactors.newsSentiment?.signal || "NEUTRAL"} | ${tradeFactors.newsSentiment?.detail || "Not available"}`;
     tradeGiftNiftyEl.textContent = `${tradeFactors.giftNifty?.signal || "NEUTRAL"} | ${tradeFactors.giftNifty?.detail || "Not available"}`;
     const executionBasis = tradeSetup.executionBasis ? `Execution: ${tradeSetup.executionBasis}` : "";
@@ -495,6 +498,7 @@ async function runSentimentAnalysis() {
     const pcr = details.pcr || {};
     const fiiDii = details.fiiDii || {};
     const technical = details.technicalIndicators || {};
+    const rsiEma = details.rsiEmaSignal || {};
     const news = details.newsSentiment || {};
 
     tomorrowSentimentEl.textContent = data.marketSentiment || "NEUTRAL";
@@ -528,6 +532,9 @@ async function runSentimentAnalysis() {
 
     technicalResultEl.textContent = `${technical.signal || "NEUTRAL"} | RSI ${Number(technical.rsi || 0).toFixed(2)} | MA50 ${formatNumber(technical.ma50)} | MA200 ${formatNumber(technical.ma200)}`;
     updateSignalElement(technicalResultEl, technical.signal || "NEUTRAL");
+
+    rsiEmaResultEl.textContent = `${rsiEma.signal || "NEUTRAL"} | ${rsiEma.setup || "No-trade / Wait"} | EMA9 ${Number(rsiEma.ema9 || 0).toFixed(2)} | EMA21 ${Number(rsiEma.ema21 || 0).toFixed(2)} | RSI14 ${Number(rsiEma.rsi14 || 0).toFixed(2)}`;
+    updateSignalElement(rsiEmaResultEl, rsiEma.signal || "NEUTRAL");
 
     newsSentimentResultEl.textContent = `${news.signal || "NEUTRAL"} | Score ${news.newsScore ?? 0} | Bullish hits ${news.bullishHits ?? 0} | Bearish hits ${news.bearishHits ?? 0}`;
     updateSignalElement(newsSentimentResultEl, news.signal || "NEUTRAL");

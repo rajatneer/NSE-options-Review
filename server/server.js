@@ -638,6 +638,15 @@ app.get("/api/stocks/top", async (req, res) => {
   }
 });
 
+app.get("/api/stocks/smallcap-high-movement", async (req, res) => {
+  try {
+    const payload = await stockAnalysisService.getSmallCapHighMovement(5);
+    res.json(payload);
+  } catch (error) {
+    handleApiError(res, "stocks-smallcap-high-movement", error);
+  }
+});
+
 app.get("/api/mutualfunds/categories", (req, res) => {
   try {
     const categories = mutualFundDataService.getSupportedCategories();
